@@ -1,0 +1,336 @@
+---
+title: "EDM project: Figure1 and Figure2"
+author: "MR"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(error = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+```{r libraries, include=FALSE}
+
+library("ggplot2")
+library("tidyverse")
+library("stringr")
+library("scales")
+library("gridExtra")
+library("grid")
+library("ggridges")
+library("RColorBrewer")
+library("knitr")
+library("ggtree")
+library("gggenomes")
+```
+
+
+```{r echo=FALSE, error=TRUE}
+## THEME
+theme_custom <- theme_bw() + theme(
+        plot.title = element_text(hjust = 0.5, size=18),
+      axis.title = element_text(size=16),
+      axis.text = element_text(size=15),
+      legend.title = element_text(size=16),
+      legend.text = element_text(size=15),
+      panel.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.margin=grid::unit(c(0,0,0,0), "mm"))
+
+pal=brewer.pal(5,"Set1")
+
+```
+
+# Fig 1A
+
+Plotting alignment of example region
+
+```{r}
+
+epo_seqs_raw <- read_seqs("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/CEBPA_ex1_ext.fa") %>%
+  separate(seq_id, c("coord", "seq_id"), sep="/" ) %>% 
+  separate(coord, c("start", NA), sep="-") %>% 
+           separate(start, c(NA, "start"), sep=":") %>% 
+  mutate(seq_id=as.factor(seq_id),
+         seq_id=factor(seq_id, c("Human", "Macaque", "Mouse", "Rat", "Dog")))
+
+epo_seqs <- epo_seqs_raw %>% 
+  select(-start)
+
+epo_links <- read_paf("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/CEBPA_ex1_ext.paf") %>%
+  separate(seq_id, c(NA, "seq_id"), sep="/" )%>%
+  separate(seq_id2, c(NA, "seq_id2"), sep="/" )
+
+p1 <- gggenomes(seqs=epo_seqs, links = epo_links) +
+ geom_seq() + geom_bin_label() + geom_link() 
+
+p2 <- p1 %>% add_links(epo_links) %>%
+ flip(3:4)
+
+p2
+ggsave(plot=p2, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/synteny.pdf",width = 15)
+
+```
+
+
+Plot methylation of example region
+
+```{r fig.width=10, fig.height=2}
+meth_data=c()
+species=c("human", "macaque", "mouse", "rat", "dog")
+for (sp in species) {
+  path_fl=paste0("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_ex1_ext_", sp,".bed")
+  sp=str_to_title(sp) 
+  meth_data <- read.table(path_fl, header = F) %>% 
+  rename(chr=V1, start=V2, meth=V4) %>% 
+  mutate(seq_id=sp) %>% 
+  select(seq_id, chr, start, meth) %>% 
+  left_join(.,epo_seqs_raw, by="seq_id") %>% 
+  mutate(rel_start=start.x-as.numeric(start.y)) %>% 
+  select(seq_id, rel_start, seq_id, meth, length) %>% 
+  rbind(.,meth_data)
+}
+head(meth_data)
+
+# Human
+meth_pl=meth_data %>% 
+  filter(seq_id=="Human") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Human")]/1000
+
+ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_human_ex1_ext.pdf", width = width, height = 1)
+
+# Macaque
+meth_pl=meth_data %>% 
+  filter(seq_id=="Macaque") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Macaque")]/1000
+
+ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_macaque_ex1_ext.pdf", width = width,height = 1 )
+
+# Mouse
+meth_pl=meth_data %>% 
+  filter(seq_id=="Mouse") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Mouse")]/1000
+
+ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_mouse_ex1_ext.pdf", width = width,height = 1)
+
+# Rat
+meth_pl=meth_data %>% 
+  filter(seq_id=="Rat") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Rat")]/1000
+
+ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_rat_ex1_ext.pdf", width = width,height = 1)
+
+# Dog
+meth_pl=meth_data %>% 
+  filter(seq_id=="Dog") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Dog")]/1000
+
+ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_dog_ex1_ext.pdf", width = width,height = 1)
+```
+
+
+
+# Fig1B: Covered CpGs in Genomes
+
+```{r cov, fig.width=10,fig.height=8, echo=FALSE,  message=FALSE }
+
+options(scipen=10000)
+cpgReport_files <- list.files(path="/nfs/research/flicek/user/rimoldi/Projects/EDM/BS/Meth_Calls",pattern="*.CpG_report.txt",full.names=TRUE)
+final=c()
+for (fl in cpgReport_files){
+    sp=str_split(basename(fl), "_")[[1]][1]
+    tmp=read.table(fl)
+    tot=nrow(tmp)
+    cov=tmp %>% filter(V4+V5!=0) %>% nrow()
+    final= data.frame(
+        Species=as.factor(sp),
+        total=as.numeric(tot),
+        covered=as.numeric(cov)) %>% 
+        rbind(final,.)
+
+}
+
+final <- final %>%
+    mutate(perc=covered*100/total)
+
+
+final$Species=as.factor(final$Species)
+final$Species=factor(final$Species, c("Human", "Macaque", "Mouse", "Rat", "Dog"))
+
+names(pal) <- levels(final$Species)
+fillScale <- scale_fill_manual(name = "Species",values = pal)
+colScale <- scale_colour_manual(name = "Species",values = pal)
+
+cpgIngenomes <- ggplot(final, aes(x = Species, y = perc, fill=Species, size=covered)) +
+  geom_point( shape = 21, colour = "black") +
+  scale_size_continuous(range=c(8,20))+
+  coord_cartesian(ylim=c(0,110))+
+  theme_bw()+
+  ylab("% of covered CpGs")+
+  labs(fill="# CpGs")+
+  fillScale +
+  theme( text = element_text(size = 26),
+    axis.text = element_text(colour = "black"),
+    axis.title.x = element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())+
+    guides(color="none")
+
+#  scale_size_area(max_size = 20)+
+cpgIngenomes
+
+ggsave(plot=cpgIngenomes, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CoveredCpGsinGenomes.pdf")
+
+```
+
+
+
+# Fig1C: Genomic methylation distributions
+
+```{r genomicMeth, echo=FALSE, error=TRUE}
+load("/hps/software/users/flicek/rimoldi/Scripts/EvoDNAmeth/PlotAndAnalysis/CpGmeth_densityPlots_BRandBS.RData")
+
+
+genomicMeth <- genomewide + xlab("Methylation") + colScale
+genomicMeth
+ggsave(plot=genomicMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_genomicMeth_densityDistribution.pdf")
+
+```
+
+# Fig2A: Percent of Binding Regions / Binding Sites containing CpGs
+
+```{r BRvsBS, fig.width=7,fig.height=10, echo=FALSE, error=TRUE , message=FALSE}
+#rm(list=ls())
+load("/hps/software/users/flicek/rimoldi/Scripts/EvoDNAmeth/PlotAndAnalysis/CpG_BSvsMotifs.RData")
+TFBRvsTFBS <- plot +
+    scale_y_continuous(limits = c(-100,100),
+                       breaks=c(-100,-50,0,50,100),
+                       labels=c("100","50","0","50","100")) +
+    ylab("       % Binding sites          % Binding Regions") +
+        theme( text = element_text(size = 26),
+          axis.text = element_text(colour = "black"),
+          axis.text.y = element_blank(),
+          axis.title.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.title = element_text(size=22),
+          legend.text = element_text(size=20),
+          panel.background = element_blank(),
+          panel.grid.minor = element_blank()) +
+          fillScale
+
+TFBRvsTFBS
+ggsave(plot=TFBRvsTFBS, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CpGs_TFBRvsTFBS.pdf")
+
+```
+
+# Fig2B: CpGs in TFBRs
+
+## histogram of CpGs
+
+```{r cpgHist, fig.width=7,fig.height=10, echo=FALSE, error=TRUE , message=FALSE}
+ggplot(BindingRegions, aes(nCpGtot))+
+    geom_histogram()+
+    facet_wrap(~Species, scales="free")
+```
+
+## density of CpGs
+```{r cpgDensity2, fig.width=8,fig.height=8, echo=FALSE, error=TRUE }
+CpGdensTFBR<- ggplot(BindingRegions, aes(x=nCpGtot, y=TF, colour=Species, fill=Species))+
+    geom_density_ridges(
+        bandwidth = 0.6,
+        alpha=0.1,
+        size=2,
+        scale=1)+
+    scale_x_continuous(trans = "log1p",breaks = c(0, 5, 20, 80)) +
+    theme( text = element_text(size = 26),
+      axis.text = element_text(colour = "black"),
+      axis.title.y = element_blank(),
+      legend.title = element_text(size=22),
+      legend.text = element_text(size=20),
+      panel.background = element_blank()) +
+      colScale
+CpGdensTFBR
+ggsave(plot=CpGdensTFBR, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_CpGdensity_TFBR.pdf")
+
+```
+
+```{r eval=FALSE, echo=FALSE}
+theme( text = element_text(size = 26),
+  axis.text = element_text(colour = "black"),
+  axis.title.y = element_blank(),
+  legend.title = element_text(size=22),
+  legend.text = element_text(size=20),
+  panel.background = element_blank(),
+  panel.grid.minor = element_blank())
+```
+
+
+# Fig2C: Average methylation distribution  within TFBRs
+
+
+```{r avgMeth, fig.width=15,fig.height=7, echo=FALSE, error=TRUE}
+#rm(list=ls())
+table=read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/FinalTables/Tables/allSpecies_allTFs.tab")
+colnames(table)=c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt",
+                "clusterN","Clusters","CGI","MethFrag","motCoord", "motCpG","RegRegion", "DistanceTSS",
+                "Gene", "yesCTCFnames", "yesCTCF", "noCTCFnames", "noCTCF","Species","TF")
+
+table$Species=as.factor(table$Species)
+table$Species=factor(table$Species, c("Human", "Macaque", "Mouse", "Rat", "Dog"))
+table$TF=as.factor(table$TF)
+table$TF=factor(table$TF, c("CTCF", "CEBPA", "HNF6", "HNF4a", "FoxA1"))
+
+
+avgMeth<-ggplot(table, aes(x=TF,y=avgMethfilt, color=Species))+
+  geom_violin(fill="grey", alpha=0.3)+
+  facet_grid(~Species, scales="free")+
+  theme_bw()+
+  theme( text = element_text(size = 26),
+    axis.text = element_text(colour = "black"),
+    axis.title.y=element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())+
+    ylab("Avg Methylation %")+
+    colScale
+
+avgMeth
+ggsave(plot=avgMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_avgMethDistribution_TFBR.pdf")
+```

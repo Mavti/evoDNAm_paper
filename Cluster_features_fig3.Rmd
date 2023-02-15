@@ -1,0 +1,884 @@
+---
+title: 'EDM project: Fig3 - Clusters Annotation'
+author: "Martina Rimoldi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(error = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+```{r echo=FALSE, include=FALSE, message=FALSE}
+
+library("tidyverse")
+library("ggplot2")
+library("RColorBrewer")
+library("ggpubr")
+library("gridExtra")
+library("grid")
+library("scales")
+library("reshape2")
+library("knitr")
+library("cowplot")
+```
+
+
+```{r echo=FALSE, error=TRUE}
+ # DATA
+tab=c()
+tab_paths <- list.files(path = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/", pattern = "DivergenceTable_*", full.names = T)
+for (fl in tab_paths) {
+ tab <- read.table(fl) %>% 
+  rbind(.,tab)
+}
+
+# by dropping NAs in Clusters, we are exluding projected unbound regions
+tab <- tab %>% drop_na("Clusters")
+
+
+#tab <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/FinalTables/Tables/allSpecies_allTFs.tab")
+#colnames(tab)=c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt","avgMethtot",	"avgMethfilt",
+#                "clusterN","Clusters","CGI","MethFrag","motCoord", "motCpG","RegRegion", "DistanceTSS",
+#                "Gene", "yesCTCFnames", "yesCTCF", "noCTCFnames", "noCTCF","Species","TF")
+
+tab$Clusters=as.factor(tab$Clusters)
+tab$Clusters=factor(tab$Clusters, rev(c("flat","right","left","middle", "up", "NC")))
+tab$Species=as.factor(tab$Species)
+tab$Species=factor(tab$Species, c("Human", "Macaque","Mouse","Rat","Dog"))
+tab$RegRegion=as.factor(tab$RegRegion)
+tab$RegRegion=factor(tab$RegRegion,c("Promoters","Enhancers", "primedEnhancers", "noOverlap"))
+#head(tab)
+#name=strsplit(name,".tab")[[1]][1]
+
+# SELECTED FOR PUBLICATION
+# Macaque-CTCF
+# Rat-CEBPA
+# Rat-HNF6
+# Mouse-FoxA1
+# Human-HNF4a
+selected <- data.frame()
+selected <- tab %>%
+    filter(TF=="CTCF" & Species=="Macaque") %>% rbind(selected)
+selected <- tab %>%
+    filter(TF=="CEBPA" & Species=="Rat") %>% rbind(selected)
+#selected <- tab %>%
+#    filter(TF=="HNF6" & Species=="Rat") %>% rbind(selected)
+selected <- tab %>%
+    filter(TF=="FoxA1" & Species=="Mouse") %>% rbind(selected)
+selected <- tab %>%
+    filter(TF=="HNF4a" & Species=="Human") %>% rbind(selected)
+
+## PALETTE
+pal=brewer.pal(6,"Pastel2")
+#display.brewer.pal(5,"Pastel2")
+pal[6]="grey"
+palfinal <- c(rep(brewer.pal(5,"Pastel2"),23)) # temporary 21
+#length(palfinal) , fill=palfinal
+names(pal) <- c("up", "right", "left", "flat", "middle" )
+fillScale <- scale_fill_manual(name = "Clusters",values = pal)
+colScale <- scale_colour_manual(name = "Clusters",values = pal)
+
+## THEME
+theme_custom <- theme(
+        plot.title = element_text(hjust = 0.5, size=18),
+      axis.title = element_text(size=16),
+      axis.text = element_text(size=15),
+      legend.title = element_text(size=16),
+      legend.text = element_text(size=15),
+      panel.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.margin=grid::unit(c(0,0,0,0), "mm"))
+
+```
+
+# Fig3A: avg CpG and methylation profiles
+
+
+```{r}
+###---------------------------------------------------------
+make_plots <- function(tmp, sp, tf) {
+  plots <- list()
+  plots[[1]] <- tmp %>%
+   melt() %>%
+   mutate(value=if_else(is.na(value), FALSE, TRUE)) %>%
+   dcast(variable~value) %>%
+   mutate(freq=`TRUE`/`FALSE`) %>%
+   ggplot( aes(variable, freq, group=1)) +
+    geom_line(colour="#389196", size=0.2) +
+    theme_custom +
+    theme(axis.text.x = element_blank(),
+         axis.title.y = element_blank()) +
+    ggtitle(tf) +
+    ylab("CpG frequency")+
+    xlab("Position")
+
+
+  plots[[2]] <- tmp %>%
+   melt() %>%
+   group_by(variable) %>%
+   summarise(avg=mean(value,na.rm = TRUE)) %>%
+   distinct() %>%
+   ggplot( aes(variable, avg)) +
+    geom_jitter(alpha=0.2, colour="salmon") +
+    ggtitle(tf) +
+    theme(axis.text.x = element_blank(),
+         axis.title.y = element_blank()) +
+    theme_custom +
+    ylab("Methylation %") +
+    xlab("Position")
+
+
+  return( plots )
+}
+
+###---------------------------------------------------------
+
+## HUMAN
+CEBPA_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CEBPA_Human_Liver_MethMatrix.txt")
+CTCF_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CTCF_Human_Liver_MethMatrix.txt")
+HNF6_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF6_Human_Liver_MethMatrix.txt")
+HNF4a_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF4a_Human_Liver_MethMatrix.txt")
+FoxA1_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/FoxA1_Human_Liver_MethMatrix.txt")
+random_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/randomRegions_Human_Liver_MethMatrix.txt")
+
+# MACAQUE
+CEBPA_Macaque <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CEBPA_Macaque_Liver_MethMatrix.txt")
+CTCF_Macaque <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CTCF_Macaque_Liver_MethMatrix.txt")
+HNF6_Macaque <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF6_Macaque_Liver_MethMatrix.txt")
+HNF4a_Macaque <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF4a_Macaque_Liver_MethMatrix.txt")
+random_Macaque <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/randomRegions_Macaque_Liver_MethMatrix.txt")
+
+
+## MOUSE
+CEBPA_Mouse <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CEBPA_Mouse_Liver_MethMatrix.txt")
+CTCF_Mouse <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CTCF_Mouse_Liver_MethMatrix.txt")
+HNF6_Mouse <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF6_Mouse_Liver_MethMatrix.txt")
+HNF4a_Mouse <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF4a_Mouse_Liver_MethMatrix.txt")
+FoxA1_Mouse <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/FoxA1_Mouse_Liver_MethMatrix.txt")
+random_Mouse <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/randomRegions_Mouse_Liver_MethMatrix.txt")
+
+
+## RAT
+CEBPA_Rat <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CEBPA_Rat_Liver_MethMatrix.txt")
+CTCF_Rat <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CTCF_Rat_Liver_MethMatrix.txt")
+HNF6_Rat <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF6_Rat_Liver_MethMatrix.txt")
+HNF4a_Rat <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF4a_Rat_Liver_MethMatrix.txt")
+FoxA1_Rat <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/FoxA1_Rat_Liver_MethMatrix.txt")
+random_Rat <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/randomRegions_Rat_Liver_MethMatrix.txt")
+
+## DOG
+CEBPA_Dog <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CEBPA_Dog_Liver_MethMatrix.txt")
+CTCF_Dog <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CTCF_Dog_Liver_MethMatrix.txt")
+HNF4a_Dog <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/HNF4a_Dog_Liver_MethMatrix.txt")
+FoxA1_Dog <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/FoxA1_Dog_Liver_MethMatrix.txt")
+random_Dog <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/randomRegions_Dog_Liver_MethMatrix.txt")
+
+
+```
+
+
+```{r fig.width=15,fig.height=15, echo=FALSE, error=TRUE}
+
+pl_CEBPA_human <- make_plots(CEBPA_Human, "Human", "CEBPA")
+pl_CTCF_human <- make_plots(CTCF_Human, "Human", "CTCF")
+pl_HNF4a_human <- make_plots(HNF4a_Human, "Human", "HNF4A")
+pl_HNF6_human <- make_plots(HNF6_Human, "Human", "HNF6")
+pl_FoxA1_human <- make_plots(FoxA1_Human, "Human", "ONECUT1")
+pl_random_Human <- make_plots(random_Human, "Human", "Random Regions")
+
+
+pl_CEBPA_Macaque <- make_plots(CEBPA_Macaque, "Macaque", "CEBPA")
+pl_CTCF_Macaque <- make_plots(CTCF_Macaque, "Macaque", "CTCF")
+pl_HNF4a_Macaque <- make_plots(HNF4a_Macaque, "Macaque", "HNF4A")
+pl_HNF6_Macaque <- make_plots(HNF6_Macaque, "Macaque", "HNF6")
+pl_random_Macaque <- make_plots(random_Macaque, "Macaque", "Random Region")
+
+pl_CEBPA_Mouse <- make_plots(CEBPA_Mouse, "Mouse", "CEBPA")
+pl_CTCF_Mouse <- make_plots(CTCF_Mouse, "Mouse", "CTCF")
+pl_HNF4a_Mouse <- make_plots(HNF4a_Mouse, "Mouse", "HNF4A")
+pl_HNF6_Mouse <- make_plots(HNF6_Mouse, "Mouse", "HNF6")
+pl_FoxA1_Mouse <- make_plots(FoxA1_Mouse, "Mouse", "ONECUT1")
+pl_random_Mouse <- make_plots(random_Mouse, "Mouse", "Random Region")
+
+
+pl_CEBPA_Rat <- make_plots(CEBPA_Rat, "Rat", "CEBPA")
+pl_CTCF_Rat <- make_plots(CTCF_Rat, "Rat", "CTCF")
+pl_HNF4a_Rat <- make_plots(HNF4a_Rat, "Rat", "HNF4A")
+pl_HNF6_Rat <- make_plots(HNF6_Rat, "Rat", "HNF6")
+pl_FoxA1_Rat <- make_plots(FoxA1_Rat, "Rat", "ONECUT1")
+pl_random_Rat <- make_plots(random_Rat, "Rat", "Random Region")
+
+
+pl_CEBPA_Dog <- make_plots(CEBPA_Dog, "Dog", "CEBPA")
+pl_CTCF_Dog <- make_plots(CTCF_Dog, "Dog", "CTCF")
+pl_HNF4a_Dog <- make_plots(HNF4a_Dog, "Dog", "HNF4A")
+pl_FoxA1_Dog <- make_plots(FoxA1_Dog, "Dog", "ONECUT1")
+pl_random_Dog <- make_plots(random_Human, "Dog", "Random Region")
+
+
+```
+
+## CpG frequency profile
+
+```{r fig.width=15,fig.height=15, echo=FALSE, error=TRUE}
+
+
+Human_cpg <- plot_grid(pl_CEBPA_human[[1]], pl_HNF4a_human[[1]],pl_HNF6_human[[1]],pl_FoxA1_human[[1]],pl_CTCF_human[[1]],pl_random_Human[[1]], nrow = 1 )
+#Human
+Macaque_cpg <- plot_grid(pl_CEBPA_Macaque[[1]], pl_HNF4a_Macaque[[1]],pl_HNF6_Macaque[[1]],NULL, pl_CTCF_Macaque[[1]],pl_random_Macaque[[1]], nrow = 1 )
+#Macaque
+Mouse_cpg <- plot_grid(pl_CEBPA_Mouse[[1]], pl_HNF4a_Mouse[[1]],pl_HNF6_Mouse[[1]],pl_FoxA1_Mouse[[1]],pl_CTCF_Mouse[[1]],pl_random_Mouse[[1]], nrow = 1 )
+#Mouse
+Rat_cpg <- plot_grid(pl_CEBPA_Rat[[1]], pl_HNF4a_Rat[[1]],pl_HNF6_Rat[[1]],pl_FoxA1_Rat[[1]],pl_CTCF_Rat[[1]],pl_random_Rat[[1]], nrow = 1 )
+#Rat
+Dog_cpg <- plot_grid(pl_CEBPA_Dog[[1]], pl_HNF4a_Dog[[1]],NULL,pl_FoxA1_Dog[[1]],pl_CTCF_Dog[[1]],pl_random_Dog[[1]], nrow = 1 )
+#Dog
+
+cpg_profiles <- plot_grid( Macaque_cpg, Mouse_cpg, Rat_cpg, Dog_cpg, ncol=1)
+cpg_profiles
+
+ggsave(plot = cpg_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CpGfreqProfiles_allSpeciesAllTFs.pdf",width=15, height = 15)
+
+```
+
+## Methylation frequency profile
+
+```{r fig.width=15,fig.height=15, echo=FALSE, error=TRUE}
+Human_meth <- plot_grid(pl_CEBPA_human[[2]], pl_HNF4a_human[[2]],pl_HNF6_human[[2]],pl_FoxA1_human[[2]],pl_CTCF_human[[2]],pl_random_Human[[2]], nrow = 1 )
+#Human
+Macaque_meth <- plot_grid(pl_CEBPA_Macaque[[2]], pl_HNF4a_Macaque[[2]],pl_HNF6_Macaque[[2]],NULL, pl_CTCF_Macaque[[2]],pl_random_Macaque[[2]], nrow = 1 )
+#Macaque
+Mouse_meth <- plot_grid(pl_CEBPA_Mouse[[2]], pl_HNF4a_Mouse[[2]],pl_HNF6_Mouse[[2]],pl_FoxA1_Mouse[[2]],pl_CTCF_Mouse[[2]],pl_random_Mouse[[2]], nrow = 1 )
+#Mouse
+Rat_meth <- plot_grid(pl_CEBPA_Rat[[2]], pl_HNF4a_Rat[[2]],pl_HNF6_Rat[[2]],pl_FoxA1_Rat[[2]],pl_CTCF_Rat[[2]],pl_random_Rat[[2]], nrow = 1 )
+#Rat
+Dog_meth <- plot_grid(pl_CEBPA_Dog[[2]], pl_HNF4a_Dog[[2]],NULL,pl_FoxA1_Dog[[2]],pl_CTCF_Dog[[2]],pl_random_Dog[[2]], nrow = 1 )
+#Dog
+
+meth_profiles <- plot_grid( Macaque_meth, Mouse_meth, Rat_meth, Dog_meth, ncol=1)
+meth_profiles
+
+ggsave(plot = meth_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/MethfreqProfiles_allSpeciesAllTFs.pdf",width=15, height = 15)
+
+```
+
+## Main figure
+```{r fig.width=15,fig.height=8, echo=FALSE, error=TRUE}
+
+Human_cpgAndmeth_profiles <- plot_grid( Human_cpg, Human_meth, ncol=1)
+Human_cpgAndmeth_profiles
+
+ggsave(plot = Human_cpgAndmeth_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Human_MethAndCpGfreqProfiles.pdf",width=15, height = 8)
+
+```
+
+
+# Fig 3B: Clustered methylation profiles
+
+output from BPRMeth.
+
+
+# Fig3C
+
+## 1: counts of TFBRs in each cluster
+
+```{r fig.width=15,fig.height=11, echo=FALSE, error=TRUE}
+count<- tab %>%
+  drop_na("Clusters") %>% 
+  group_by(Clusters,TF, Species) %>%
+  count(name="tot_count")
+
+#count
+count$Clusters=as.factor(count$Clusters)
+count$Clusters=factor(count$Clusters, c("flat","right","left", "middle","up", "NC"))
+count$Species=as.factor(count$Species)
+count$Species=factor(count$Species, c("Human", "Macaque","Mouse","Rat","Dog"))
+
+
+tot_plot <- ggplot(count,aes(x=Clusters,y=tot_count/1000, fill=Clusters))+
+  geom_bar(stat="identity", colour="black", size=0.3) + #
+  fillScale +
+  coord_flip() +
+  theme_bw() +
+  xlab("Cluster names") +
+  ylab("Count * 10^3") +
+  ggtitle("Peak counts in clusters") +
+  theme_custom +
+  facet_grid(TF~Species, scales="free")
+
+ggsave(plot = tot_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_counts_inCluster.pdf",width=9, height = 18)
+
+tot_plot
+```
+
+```{r echo=FALSE, results = 'asis', error=TRUE}
+tmp<-selected %>%
+  group_by(Clusters,TF, Species) %>%
+  count(name="tot_count")
+
+ kable(tmp)
+```
+
+## 2: overlap with regulatory elements, by cluster  
+
+
+```{r echo=FALSE,error=TRUE, message=FALSE, results='as.is'}
+tot <- tab %>%
+    drop_na("Clusters") %>% 
+    select(Clusters,TF,Species, RegRegion) %>%
+    group_by(TF,Species) %>%
+    add_count(name="totTFBRs") %>%
+    ungroup() %>%
+    group_by(Clusters,TF,Species) %>%
+    add_count(name="totClust") %>%
+    ungroup() %>%
+    group_by(Clusters,TF,Species, RegRegion) %>%
+    add_count(name="nRRinClust") %>%
+    ungroup() %>%
+    group_by(TF,Species, RegRegion) %>%
+    add_count(name="totRR") %>%
+    ungroup() %>%
+    mutate(Others=totTFBRs-totClust) %>%
+    mutate(nRRinOthers=totRR-nRRinClust) %>%
+    filter(RegRegion!="noOverlap") %>%
+    distinct()
+
+results=c()
+for (sp in c("Human", "Macaque","Mouse","Rat","Dog") ) {
+    for ( tf in c("CEBPA", "CTCF", "HNF4a", "HNF6", "FoxA1") ) {
+        tmp.results=c()
+        for ( rr in c("Promoters","Enhancers", "primedEnhancers") ) {
+            for ( cl in c("flat","right","left","middle", "up", "NC") ) {
+
+                tmp <- tot %>%
+                    filter(Species==sp) %>%
+                    droplevels()
+
+                    tfs<-levels(as.factor(tmp$TF))
+                    if (tf %in% tfs) {
+                        tmp <- tmp %>%
+                            filter(TF==tf) %>%
+                            droplevels()
+
+                        regs <- levels(as.factor(tmp$RegRegion))
+                        if (rr %in% regs) {
+                            tmp <- tmp %>%
+                                filter(RegRegion==rr) %>%
+                                droplevels()
+
+                            clust <- levels(as.factor(tmp$Clusters))
+                            if (cl %in% clust) {
+                                tmp <- tmp %>%
+                                    filter(Clusters==cl) %>%
+                                    droplevels() %>%
+                                    select(nRRinClust, nRRinOthers, totClust, Others) #%>%
+                                    #matrix(., ncol=2, byrow=T)
+
+                                    res.test<-prop.test(
+                                        x=c(tmp$nRRinClust,tmp$nRRinOthers),
+                                        n=c(tmp$totClust, tmp$Others),
+                                        alternative = "greater")
+
+                                    res.tmp=c(tf, sp, cl, rr, as.numeric(res.test$p.value))
+                                    tmp.results= rbind(tmp.results, res.tmp)
+
+                        }
+                    }
+                }
+            }
+        }
+        tmp.results=as.tibble(tmp.results)
+        colnames(tmp.results)=c("TF", "Species", "Cluster", "RegRegion", "p.value")
+        tmp.results$p.value=as.numeric(tmp.results$p.value)
+        #print(tmp.results)
+        tmp.results$p.value.adj=p.adjust(tmp.results$p.value, method="bonferroni")
+        results<-rbind(results, tmp.results)
+    }
+}
+
+results$p.value.adj=as.numeric(results$p.value.adj)
+filt=results[which(results$p.value.adj < 0.05),]
+kable(filt)
+```
+
+
+```{r  fig.width=15,fig.height=18, echo=FALSE, error=TRUE}
+RegReg <- tab %>%
+    drop_na("Clusters") %>% 
+    group_by(Clusters,TF,Species) %>%
+    add_count(name="clustCount") %>%
+    ungroup() %>%
+    group_by(Clusters,RegRegion,TF,Species) %>%
+    add_count(name="rrInClust") %>%
+    mutate(Fraction=rrInClust/clustCount)%>%
+    select(TF, Species, Clusters, RegRegion, Fraction) %>% 
+    distinct()
+#RegReg
+
+RegReg$Clusters=as.factor(RegReg$Clusters)
+RegReg$Clusters=factor(RegReg$Clusters, c("flat","right","left", "middle","up", "NC"))
+RegReg$RegRegion=as.factor(RegReg$RegRegion)
+RegReg$RegRegion=factor(RegReg$RegRegion,rev(c("Promoters","Enhancers", "primedEnhancers", "noOverlap")))
+
+pal4=c("#c5e9d9","#a1dbc1","#7ccda9","black",
+       "#fedcc5","#fcbe93","#fba061","black",
+       "#dde3f0","#b9c7e0","#96aad1","black",
+       "#f8dfef","#f0b5d9","#e78bc4","black",
+       "#8d8d8d","#737373", "#5a5a5a","black")
+finalpal4 <- c(rep(pal4,23))
+#length(pal4)
+
+
+val=rev(c(0.25, 0.5, 0.75,1))
+names(val) <- levels(tab$RegRegion)
+alphaScale <- scale_alpha_manual(name = "RegRegion",values = val)
+
+```
+
+Selected for Figure  
+
+```{r fig.width=15,fig.height=5, echo=FALSE, error=TRUE}
+sel <- selected %>%
+  drop_na("Clusters") %>% 
+  group_by(Clusters,TF,Species) %>%
+  add_count(name="clustCount") %>%
+  ungroup() %>%
+  group_by(Clusters,RegRegion,TF,Species) %>%
+  add_count(name="rrInClust") %>%
+  mutate(Fraction=rrInClust/clustCount)%>%
+  select(TF, Species, Clusters, RegRegion, Fraction) %>%
+  filter(TF != "CTCF") %>%
+  ggplot( aes(Clusters , fill=Clusters, alpha=RegRegion))+
+    coord_flip()+
+    geom_bar(stat="count",position="fill", size=0.1, colour="black")+
+    fillScale+
+    alphaScale+
+    theme_bw()  +
+    ylab("Fraction") +
+    ggtitle("Overlap with Regulatory Regions") +
+    theme_custom+
+    theme(
+        axis.title.y = element_blank(),
+    legend.position="none")+
+    facet_grid(~Species, scales="free")
+sel
+
+ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_sel.pdf",width=10, height = 5)
+```
+
+CTCF  
+
+```{r fig.width=7,fig.height=5, echo=FALSE, error=TRUE}
+sel_noCTCF <- selected %>%
+  drop_na("Clusters") %>% 
+  group_by(Clusters,TF,Species) %>%
+  add_count(name="clustCount") %>%
+  ungroup() %>%
+  group_by(Clusters,RegRegion,TF,Species) %>%
+  add_count(name="rrInClust") %>%
+  mutate(Fraction=rrInClust/clustCount)%>%
+  select(TF, Species, Clusters, RegRegion, Fraction) %>%
+  filter(TF == "CTCF") %>%
+  ggplot( aes(Clusters , fill=Clusters, alpha=RegRegion))+
+    coord_flip()+
+    geom_bar(stat="count",position="fill", size=0.1, colour="black")+
+    fillScale+
+    alphaScale+
+    theme_bw()  +
+    ylab("Fraction") +
+    ggtitle("Overlap with Regulatory Regions") +
+    theme_custom+
+    theme(
+        axis.title.y = element_blank())+
+    facet_grid(~Species, scales="free")
+sel_noCTCF
+ggsave(plot = sel_noCTCF, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_CTCF.pdf",width=10, height = 5)
+```
+
+
+
+### Supp: all TFs and Species
+
+```{r fig.width=15,fig.height=18, echo=FALSE, error=TRUE}
+
+rr_plot <- RegReg %>%
+    filter(RegRegion !="noOverlap") %>%
+    mutate(Percentage=Fraction*100) %>% 
+    ggplot( aes(x=Clusters , y=Fraction, fill=RegRegion))+
+      geom_bar(position="stack", stat="identity", size=0.1, colour="black")+
+      scale_fill_brewer(palette = "Set3") +
+      coord_flip()+
+      ylab("Fraction") +
+      ggtitle("Overlap with Regulatory Regions") +
+      theme_pubclean()  +
+      facet_grid(TF~Species, scales="free")+
+      theme_custom+
+      theme(
+          axis.title.y = element_blank())+
+  facet_grid(TF~Species, scales="free")
+
+
+rr_plot
+
+ggsave(plot = rr_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_all.pdf",width=10, height = 5)
+```
+
+
+# Fig 3D
+
+# 8. DISTANCE FROM TSSs
+
+```{r fig.width=15,fig.height=11, echo=FALSE, error=TRUE}
+
+
+TSSdist<-ggplot(tab, aes(x=DistanceTSS,colour=Clusters))+
+    stat_ecdf(geom = "step",) +
+    colScale +
+    coord_cartesian( xlim=c(0,50000)) +
+    fillScale +
+    theme_bw() +
+    xlab("Distance from the nearest TSS")+
+    scale_x_continuous(limits = c(0, 75000), breaks = seq(0, 50000, by = 10000))+
+    theme_custom+
+    facet_grid(TF~Species, scales="free")
+TSSdist
+
+ggsave(plot = TSSdist, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSdistance_byCluster_all.pdf",width=20, height = 25)
+
+```
+
+```{r eval=FALSE}
+sel <- selected %>%
+    ggplot( aes(x=DistanceTSS,colour=Clusters))+
+    stat_ecdf(geom = "step") +
+    colScale +
+    coord_cartesian( xlim=c(0,50000)) +
+    theme_bw() +
+    xlab("Distance from the nearest TSS")+
+    scale_x_continuous(limits = c(0, 75000), breaks = seq(0, 50000, by = 10000))+
+    theme_custom+
+    theme(
+            legend.position="none")+
+    facet_grid(~Species, scales="free")
+sel
+#ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSdistance_byCluster_sel.pdf",width=10, height = 5)
+```
+
+
+
+# More Supplementary Figures
+
+## CpG island overlaps
+
+```{r echo=FALSE, error=TRUE}
+cgi <- tab %>%
+  group_by(Clusters, CGI,TF,Species) %>%
+  count(name="cgi_count") %>%
+  group_by(Clusters, TF,Species) %>%
+  mutate(tot=sum(cgi_count)) %>%
+  mutate(Fraction=cgi_count/tot) %>%
+  filter(CGI=="CGI")
+
+#head(cgi)
+
+cgi$Clusters=as.factor(cgi$Clusters)
+cgi$Clusters=factor(cgi$Clusters, c("flat","right","left", "middle","up", "NC"))
+cgi$Species=as.factor(cgi$Species)
+cgi$Species=factor(cgi$Species, c("Human", "Macaque","Mouse","Rat","Dog"))
+
+```
+
+### By cluster
+
+```{r  fig.width=15,fig.height=11, echo=FALSE, error=TRUE}
+## CGI
+## all species and factors
+cgi_plot <- ggplot(cgi, aes(Clusters, Fraction, fill=Clusters))+
+  geom_bar(stat="identity", colour="black", size=0.3)+
+  fillScale +
+  coord_flip(ylim = c(0,0.7))+
+  theme_bw() +
+  xlab("Cluster names") +
+  ylab("Fraction") +
+  ggtitle("Overlap with CpG islands") +
+  scale_y_continuous(labels = function(x) paste0(x, "%"))+
+  theme_custom+
+  facet_grid(TF~Species, scales="free")
+cgi_plot
+
+ggsave(plot = cgi_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_CpGoverlap_byCluster_all.pdf",width=10, height = 15)
+```
+
+```{r fig.width=10,fig.height=5, echo=FALSE, error=TRUE}
+#selected
+sel <- selected %>%
+filter(TF!="CTCF") %>%
+  group_by(Clusters, CGI,TF,Species) %>%
+  count(name="cgi_count") %>%
+  ungroup() %>%
+  group_by(Clusters, TF,Species) %>%
+  mutate(tot=sum(cgi_count)) %>%
+  mutate(Fraction=cgi_count*100/tot) %>%
+  filter(CGI=="CGI") %>%
+  ggplot( aes(Clusters, Fraction, fill=Clusters))+
+    geom_bar(stat="identity", colour="black", size=0.3)+
+    fillScale +
+    coord_flip()+
+    theme_bw() +
+    xlab("Cluster names") +
+    ylab("Fraction") +
+    ggtitle("Overlap with CpG islands") +
+    scale_y_continuous(labels = function(x) paste0(x, "%"))+
+    theme_custom +
+    theme(
+        legend.position="none")+
+    facet_grid(~Species, scales="free")
+sel
+
+#labels = scales::percent_format(accuracy = 5L)
+#ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_CpGoverlap_byCluster.pdf",width=10, height = 15)
+```
+
+```{r fig.width=5,fig.height=5, echo=FALSE, error=TRUE}
+sel_noCTCF<- selected %>%
+    filter(TF=="CTCF") %>%
+  group_by(Clusters, CGI,TF,Species) %>%
+  count(name="cgi_count") %>%
+  ungroup() %>%
+  group_by(Clusters, TF,Species) %>%
+  mutate(tot=sum(cgi_count)) %>%
+  mutate(Fraction=cgi_count*100/tot) %>%
+  filter(CGI=="CGI") %>%
+  ggplot( aes(Clusters, Fraction, fill=Clusters))+
+    geom_bar(stat="identity", colour="black", size=0.3)+
+    fillScale +
+    coord_flip()+
+    theme_bw() +
+    xlab("Cluster names") +
+    ylab("Fraction") +
+    ggtitle("Overlap with CpG islands") +
+    scale_y_continuous(labels = function(x) paste0(x, "%"))+
+    theme_custom +
+    theme(
+         legend.position="none")
+sel_noCTCF
+
+#ggsave(plot = sel_noCTCF, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_CGIoverlap_byCluster.pdf",width=9, height = 18)
+```
+
+### Total CGI overlap
+
+```{r fig.width=15,fig.height=11, echo=FALSE, error=TRUE}
+cgitot <- tab %>%
+  group_by(TF,Species,CGI) %>%
+  count() %>%
+  group_by(TF,Species) %>%
+  mutate(tot=sum(n)) %>%
+  mutate(frac=n/tot) %>%
+  ggplot( aes(CGI,frac, fill=CGI))+
+  geom_col()+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 5L))+
+  theme_bw()+
+  theme(legend.position = "none") +
+  ylab("% of TFs")+
+  xlab("CpG islands (CGI)") +
+  theme(plot.title = element_text(hjust = 0.5, size=18),
+        axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=15))+
+  facet_grid(TF~Species, scales = "free")
+cgitot
+
+ggsave(plot = cgitot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/totCGI_inClusters.pdf", width=7, height = 15)
+
+```
+
+## avg Methylation at TFBRs, by cluster
+
+```{r fig.width=18,fig.height=12, echo=FALSE, error=TRUE}
+avgMeth <- ggplot(tab, aes(x=Clusters, y=avgMethfilt, fill=Clusters))+
+  geom_boxplot()+
+  theme_bw()+
+  ylab("% Meth")+
+  fillScale+
+  theme(plot.title = element_text(hjust = 0.5, size=18),
+        axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=15))+
+  facet_grid(TF~Species, scales = "free")
+avgMeth
+
+ggsave(plot = avgMeth, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/allSpecies_allTFs_avgMethylation_bycluster.pdf", width=7, height = 15)
+
+```
+
+## CpG counts at TFBRs by cluster
+
+### all TFs and Species
+
+```{r fig.width=20,fig.height=15, echo=FALSE, error=TRUE}
+#
+my_comparisons= list(c("flat", "right"), c("left", "right"), c("up","left"), c("up", "NC"))
+ncpg_noCTCF <- tab %>%
+    filter(TF!="CTCF") %>%
+    ggplot(aes(x=Clusters, y=(nCpGtot+1), fill=Clusters)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white", outlier.shape = NA) +
+  scale_y_continuous(trans = "log2")+
+  fillScale+
+  theme_bw()+
+  ggtitle("CpG coverage")+
+  ylab("log2(num of CpGs)")+
+  theme_bw()+
+  theme_custom+
+  theme(
+        legend.position = "none")+
+  facet_grid(TF~Species, scales="free")+
+  coord_flip() +
+  stat_compare_means(method="wilcox.test", comparisons= my_comparisons,
+            label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+ncpg_noCTCF
+
+ggsave(plot = ncpg_noCTCF, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/logCpGs_inCluster_noCTCF.pdf",width=15, height = 10)
+```
+
+```{r fig.width=20,fig.height=5, echo=FALSE, error=TRUE}
+my_comparisons= list( c("up", "NC"),
+        c("flat", "middle"), c("middle", "up"))
+ncpg_CTCF <- tab %>%
+    filter(TF=="CTCF") %>%
+    ggplot(aes(x=Clusters, y=(nCpGtot+1), fill=Clusters)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white", outlier.shape = NA) +
+  scale_y_continuous(trans = "log2")+
+  fillScale+
+  theme_bw()+
+  ggtitle("CpG coverage")+
+  ylab("log2(num of CpGs)")+
+  theme_bw()+
+  theme_custom+
+  theme(
+        legend.position = "none")+
+  facet_grid(TF~Species, scales="free")+
+  coord_flip() +
+  stat_compare_means(method="wilcox.test", comparisons= my_comparisons,
+            label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+ncpg_CTCF
+ggsave(plot = ncpg_CTCF, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/logCpGs_inCluster_CTCF.pdf",width=15, height = 5)
+```
+
+### Selected TFs and Species
+
+```{r fig.width=15,fig.height=5, echo=FALSE, error=TRUE}
+
+my_comparisons= list(c("flat", "right"), c("left", "right"), c("up","left"), c("up", "NC"))
+
+selected %>%
+    filter(TF!="CTCF") %>%
+  ggplot( aes(x=Clusters, y=(nCpGtot+1), fill=Clusters)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white", outlier.shape = NA) +
+  scale_y_continuous(trans = "log2")+
+  fillScale+
+  theme_bw()+
+  ggtitle("CpG coverage")+
+  ylab("log2(num of CpGs)")+
+  theme_bw()+
+  theme_custom+
+  theme(
+        legend.position = "none")+
+  facet_grid(~Species, scales="free") +
+  stat_compare_means(method="wilcox.test", comparisons= my_comparisons,
+            label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+```
+
+## FOLD ENRICHEMENT by cluster
+This shows the log2 foldE (ChIPseq patameter) distribution divided by cluster.
+
+
+```{r fig.width=15,fig.height=11, echo=FALSE, error=TRUE}
+#palpal=brewer.pal(6,"Pastel2")
+#display.brewer.pal(6,"Pastel2")
+#palpal[6]="grey"
+
+my_comparisons= list(c("flat", "right"), c("left", "right"), c("up","left"), c("up", "NC"))
+
+foldE <- tab %>%
+    filter(TF!="CTCF") %>%
+    ggplot(aes(x=Clusters, y=log2(foldE), fill=Clusters)) +
+  geom_violin() +
+  fillScale +
+  geom_boxplot(width=0.1, fill="white") +
+  theme_bw()+
+  ggtitle("Log2 Fold enrichment")+
+  theme_custom+
+  theme(
+        axis.title.y = element_blank(),
+        legend.position = "none")+
+  facet_grid(TF~Species, scales="free")+
+  stat_compare_means(method="wilcox.test", comparisons= my_comparisons,
+            label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+foldE
+
+
+foldE <- tab %>%
+    filter(TF!="CTCF") %>%
+    ggplot(aes(x=Clusters, y=log2(foldE), fill=Clusters)) +
+  geom_boxplot() +
+  fillScale +
+  theme_bw()+
+  ggtitle("Log2 Fold enrichment")+
+  theme_custom+
+  theme(
+        axis.title.y = element_blank(),
+        legend.position = "none")+
+  facet_grid(TF~Species, scales="free")+
+  stat_compare_means(method="wilcox.test", comparisons= my_comparisons,
+            label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+foldE
+ggsave(plot = foldE, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_foldE_byCluster.pdf",width=9, height = 18)
+```
+
+```{r fig.width=15,fig.height=5, echo=FALSE, error=TRUE}
+my_comparisons= list(c("flat", "middle"), c("middle", "up"), c("up", "NC"))
+
+foldE <- tab %>%
+    filter(TF=="CTCF") %>%
+    ggplot(aes(x=Clusters, y=log2(foldE), fill=Clusters)) +
+  geom_boxplot() +
+  fillScale +
+  theme_bw()+
+  ggtitle("Log2 Fold enrichment")+
+  theme_custom+
+  theme(
+        axis.title.y = element_blank(),
+        legend.position = "none")+
+  facet_grid(TF~Species, scales="free")+
+  stat_compare_means(method="wilcox.test", comparisons= my_comparisons,
+            label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+foldE
+ggsave(plot = foldE, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pkCTCF_foldE_byCluster.pdf",width=9, height = 18)
+```
+
+```{r fig.width=15,fig.height=5, echo=FALSE, error=TRUE}
+ggplot(selected,aes(x=Clusters, y=log2(foldE), fill=Clusters)) +
+      geom_violin() +
+      fillScale +
+      geom_boxplot(width=0.1, fill="white") +
+      theme_bw()+
+      ggtitle("Log2 Fold enrichment")+
+      theme_custom+
+      theme(
+            axis.title.y = element_blank(),
+            legend.position = "none")+
+      facet_grid(~Species, scales="free")
+```

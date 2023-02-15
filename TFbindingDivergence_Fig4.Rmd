@@ -1,0 +1,428 @@
+---
+title: "EDM project: TF Binding Divergence - Fig 4"
+author: "MR"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+```{r libraries, echo=FALSE,include=FALSE, message=FALSE}
+
+
+library("ggplot2")
+library("RColorBrewer")
+library("tidyverse")
+library("ggpubr")
+library("scales")
+library("gridExtra")
+library("grid")
+library("reshape2")
+library("corrplot")
+library("FactoMineR")
+library("factoextra")
+library("clinfun")
+
+grab_grob <- function(){
+  grid.echo()
+  grid.grab()
+}
+```
+
+
+```{r echo=FALSE, error=TRUE}
+## THEME
+theme_custom <- theme_bw() + theme(
+        plot.title = element_text(hjust = 0.5, size=18),
+      axis.title = element_text(size=16),
+      axis.text = element_text(size=15),
+      legend.title = element_text(size=16),
+      legend.text = element_text(size=15),
+      panel.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.margin=grid::unit(c(0,0,0,0), "mm"))
+
+pal=c(brewer.pal(12, 'Set3')[5], brewer.pal(12, 'Set3')[4])
+names(pal) <- c("unbound", "bound")
+fillScale <- scale_fill_manual(name = "binding",values = pal)
+```
+
+
+# READ-IN THE TABLES
+
+```{r echo=FALSE}
+# Input files are from:
+# - FinalTables/Tables (New clusters)
+# - TFbindingDivergence/CrossSpecies/Tables/
+
+# The merged table only includes bound peaks (aligned and unaligned)
+
+all<-read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/FinalTables/Tables/allSpecies_allTFs.tab")
+colnames(all)<-c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt","clusterN","Clusters","CGI","MethFrag","motCoord", "motCpG","RegRegion", "DistanceTSS",
+                "Gene", "yesCTCFnames", "yesCTCF", "noCTCFnames", "noCTCF","Species","TF")
+all$binding<-"bound"
+
+
+div<-read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/TFbindingDivergence/CrossSpecies/Tables/AllTFs_allSpecies_AlignmentAndBindingConservation_alignedPeaks.txt")
+colnames(div)<-c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt","align","num_align","bindingCons","num_bindingCons","cat", "label","binding", "TF","Species", "SpeciesFrom")
+#levels(div$cat)
+
+lp<-read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/TFbindingDivergence/CrossSpecies/LostPeak/allTFs_allSpecies_LostPeak_avgMeth.txt")
+colnames(lp)<-c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt","align","num_align","bindingCons","num_bindingCons","cat", "label","binding", "TF","Species", "SpeciesFrom")
+#levels(lp$cat)
+
+
+## JOIN INFOs FROM ALL TFs WITH INFO ABOUT DIVERGENCE (lostpeak excluded)
+## IF PEAKS DO NOT ALIGN, "NA" IS PRESENT IN COLUMNS ABOUT DIVERGENCE
+merge <- full_join( all,div, by=c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt","TF","Species","binding"))
+#head(merge)
+merge <- merge %>%
+  mutate(align=coalesce(align,Species),
+         bindingCons=coalesce(bindingCons,Species),
+         num_align=replace_na(num_align,1),
+         num_bindingCons=replace_na(num_bindingCons,1),
+         cat=replace_na(cat,"SpSpecificGains"),
+         label=replace_na(paste0(Species,"SpecificGains")),
+         SpeciesFrom=coalesce(SpeciesFrom,Species),
+         Clusters_short=factor(if_else(Clusters == "right", "specular",as.character(Clusters) )),
+         Clusters_short=factor(if_else(Clusters == "left", "specular",as.character(Clusters) )),
+         cat=factor(if_else(cat=="UltraGains", "UltraCons", as.character(cat) )),
+         label=factor(if_else(label=="UltraGains", "UltraCons", as.character(label) )))
+#levels(merge$cat)
+
+#tmp <- bind_rows(merge, lp)
+
+merge$binding=as.factor(merge$binding)
+merge$num_bindingCons=as.factor(merge$num_bindingCons)
+merge$Clusters=as.factor(merge$Clusters)
+merge$Clusters=factor(merge$Clusters, levels=c("flat", "left","right","middle","up","NC"))
+
+merge$cat=as.factor(merge$cat)
+merge$cat=factor(merge$cat, levels=c("UltraCons", "SpSpecificLoss","LineageLoss","LineageGains","SpSpecificGains","evoDynamic"))
+merge$Species <- as.factor(merge$Species)
+merge$Species<- factor(merge$Species, levels = c("Human","Macaque","Mouse","Rat","Dog"))
+
+
+##--------------------------------------------------
+
+#dim(div)
+#dim(all)
+#dim(merge)
+
+div_all <- rbind(div, lp) %>%
+  mutate(cat=factor(if_else(cat=="UltraGains", "UltraCons", as.character(cat) )),
+         label=factor(if_else(label=="UltraGains", "UltraCons", as.character(label) )))
+
+#levels(div_all$cat)
+
+div_all$cat=as.factor(div_all$cat)
+div_all$cat=factor(div_all$cat, levels=c("UltraCons","SpSpecificLoss","LineageLoss","LineageGains","SpSpecificGains","evoDynamic"))
+div_all$Species <- as.factor(div_all$Species)
+div_all$Species<- factor(div_all$Species, levels = rev(c("Human","Macaque","Mouse","Rat","Dog")))
+div$Species <- as.factor(div$Species)
+div$Species<- factor(div$Species, levels = c("Human","Macaque","Mouse","Rat","Dog"))
+div$cat=as.factor(div$cat)
+div$cat=factor(div$cat, levels=c("UltraCons","SpSpecificLoss","LineageLoss","LineageGains","SpSpecificGains","evoDynamic"))
+
+##--------------------------------------------------
+tab <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/FinalTables/Tables/allSpecies_allTFs.tab")
+colnames(tab)=c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt","avgMethtot",	"avgMethfilt",
+                "clusterN","Clusters","CGI","MethFrag","motCoord", "motCpG","RegRegion", "DistanceTSS",
+                "Gene", "yesCTCFnames", "yesCTCF", "noCTCFnames", "noCTCF","Species","TF")
+
+div_all_withanno <- left_join(div_all,tab)
+
+div_all_withanno$cat=as.factor(div_all_withanno$cat)
+div_all_withanno$num_bindingCons=as.factor(div_all_withanno$num_bindingCons)
+div_all_withanno$num_bindingCons=factor(div_all_withanno$num_bindingCons,  c("5", "4", "3", "2", "1") )
+div_all_withanno$cat=factor(div_all_withanno$cat, levels=c("UltraCons","SpSpecificLoss","LineageLoss","LineageGains","SpSpecificGains","evoDynamic"))
+div_all_withanno$Species <- as.factor(div_all_withanno$Species)
+div_all_withanno$Species<- factor(div_all_withanno$Species, levels = rev(c("Human","Macaque","Mouse","Rat","Dog")))
+
+
+```
+
+
+## SAVE TABLES FOR SUPPLEMENTARY DATA
+
+```{r}
+
+HNF4A <- div_all_withanno %>% 
+  filter( TF=="HNF4a" ) 
+
+#dim(HNF4A)
+
+write.table(HNF4A, file = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/DivergenceTable_HNF4A.tab", sep="\t", col.names = T)
+
+CEBPA_HNF6 <- div_all_withanno %>% 
+  filter( TF=="HNF6" | TF=="CEBPA") 
+
+#dim(CEBPA_HNF6)
+
+write.table(CEBPA_HNF6, file = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/DivergenceTable_CEBPA_HNF6.tab", sep="\t", col.names = T)
+
+CTCF_FOXA1 <- div_all_withanno %>% 
+  filter( TF=="CTCF" | TF=="FoxA1" ) 
+
+#dim(CTCF_FOXA1)
+
+write.table(CTCF_FOXA1, file = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/DivergenceTable_CTCF_FOXA1.tab", sep="\t", col.names = T)
+```
+
+
+##  RANDOM REGIONS
+
+```{r }
+species=c("Human","Macaque","Mouse","Rat","Dog")
+random_path=file.path("/nfs/research/flicek/user/rimoldi/Projects/EDM/RandomRegions")
+#sp="Mouse"
+allRandom=c()
+for (sp in species) {
+  allRandom=read.table(paste0(random_path,"/",sp,"_randomRegions.bed")) %>% 
+    mutate(V11=sp,
+           V12="BG",
+           V13="Random") %>% 
+    rbind(allRandom,.)
+}
+#allRandom
+
+colnames(allRandom)<-c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt", "Species", "TF","binding")
+```
+
+# 4B: Bound vs Unbound
+
+## All peaks
+
+```{r  fig.width=7,fig.height=15}
+
+div_all_random <- bind_rows(div_all_withanno, allRandom )
+#levels(as.factor(div_all_random$TF))
+div_all_random$TF=as.factor(div_all_random$TF)
+div_all_random$TF=factor(div_all_random$TF, c("CTCF", "CEBPA", "HNF6", "HNF4a", "FoxA1", "BG"))
+
+BvsUnb<- ggplot(div_all_random, aes(x=TF,y=avgMethfilt, fill=binding))+
+  geom_boxplot(notch=TRUE, outlier.alpha=0.1, position = position_dodge2(preserve = "single"))+
+  facet_grid(Species~., scales="free")+
+  theme_bw()+
+  theme( text = element_text(size = 26),
+    axis.text = element_text(colour = "black"),
+    axis.title.y=element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    strip.background = element_blank())+
+    ylab("Avg Methylation %")+
+    coord_flip() +
+    fillScale +
+    stat_compare_means(aes(group = binding), method="wilcox.test",
+              label = "p.signif", hide.ns=F, p.adjust.method="bonferroni")
+
+    #stat_compare_means(method="wilcox.test",
+    #          label = "p.signif", hide.ns=F)
+BvsUnb
+ggsave(plot=BvsUnb, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution.pdf")
+```
+
+## Orthologous peaks
+
+```{r fig.width=15,fig.height=12 }
+
+div_all_withanno$TF=as.factor(div_all_withanno$TF)
+div_all_withanno$TF=factor(div_all_withanno$TF, c("CTCF", "CEBPA", "HNF6", "HNF4a", "FoxA1"))
+
+GainsVsLosses <- div_all_withanno %>% 
+  filter( grepl("Gains|Loss",cat)) %>% 
+  mutate(isGain=if_else(condition = grepl("Gains",cat),true = TRUE, false = FALSE ))
+
+levels(droplevels(as.factor(GainsVsLosses$cat)))
+#div_all$TF=as.factor(div_all$TF)
+#div_all$TF=factor(div_all$TF, c("CTCF", "CEBPA", "HNF6", "HNF4a", "FoxA1"))
+
+BvsUnb_GainLoss_v1<- ggplot(GainsVsLosses, aes(x=TF,y=avgMethfilt, colour=binding, fill=isGain))+
+  geom_boxplot(notch=TRUE, outlier.alpha=0.1)+
+  facet_grid(Species~., scales="free")+
+  scale_fill_manual(name = "isGain",values = c("white", "grey"))+
+  scale_colour_manual(name="binding", values=pal )+
+  theme_bw()+
+  theme( text = element_text(size = 26),
+    axis.text = element_text(colour = "black"),
+    axis.title.y=element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())+
+    ylab("Avg Methylation %")
+
+    #stat_compare_means(method="wilcox.test",
+    #          label = "p.signif", hide.ns=F)
+BvsUnb_GainLoss_v1
+ggsave(plot=BvsUnb_GainLoss_v1, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution_GainVsLosses_v1.pdf")
+
+BvsUnb_GainLoss_v2 <- ggplot(GainsVsLosses, aes(x=TF,y=avgMethfilt, colour=binding, fill=isGain))+
+  geom_boxplot(notch=TRUE, outlier.alpha=0.1)+
+  facet_grid(Species~binding, scales="free")+
+  scale_fill_manual(name = "isGain",values = c("white", "grey"))+
+  scale_colour_manual(name="binding", values=pal )+
+  theme_bw()+
+  theme( text = element_text(size = 26),
+    axis.text = element_text(colour = "black"),
+    axis.title.y=element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())+
+    ylab("Avg Methylation %") +
+    stat_compare_means(aes(group = isGain), method="wilcox.test",
+              label = "p.signif", hide.ns=F)
+
+BvsUnb_GainLoss_v2
+ggsave(plot=BvsUnb_GainLoss_v2, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution_GainVsLosses_v2.pdf")
+```
+
+
+# 4C: num of species vs methylation
+
+
+```{r }
+
+results=c()
+for (sp in c("Human", "Macaque","Mouse","Rat","Dog") ) {
+    for ( tf in c("CEBPA", "CTCF", "HNF4a", "HNF6", "FoxA1") ) {
+
+        tmp_bound <- div_all_withanno %>%
+            filter(Species==sp) %>%
+            filter(binding=="bound") %>%
+            droplevels()
+
+        tmp_unbound <- div_all_withanno %>%
+            filter(Species==sp) %>%
+            filter(binding=="unbound") %>%
+            droplevels()
+
+            tfs<-levels(as.factor(tmp_bound$TF))
+            if (tf %in% tfs) {
+                tmp_bound <- tmp_bound %>%
+                    filter(TF==tf) %>%
+                    droplevels()
+
+                tmp_unbound <- tmp_unbound %>%
+                    filter(TF==tf) %>%
+                    droplevels()
+
+            t=jonckheere.test(x=tmp_bound$avgMethfilt, g=as.ordered(factor(tmp_bound$num_bindingCons)), alternative="increasing")
+            results=rbind(results, c(tf,sp, "bound", t$p.value))
+
+            t=jonckheere.test(x=tmp_unbound$avgMethfilt, g=as.ordered(factor(tmp_unbound$num_bindingCons)), alternative="increasing")
+            results=rbind(results, c(tf,sp, "unbound", t$p.value))
+
+        }
+    }
+}
+
+colnames(results)=c("TF","Species","binding","pval")
+print(results)
+
+```
+
+```{r echo=FALSE, fig.width=18,fig.height=12}
+
+
+
+div_all_withanno$num_bindingCons=as.factor(div_all_withanno$num_bindingCons)
+div_all_withanno$num_bindingCons=factor(div_all_withanno$num_bindingCons, c("5", "4", "3", "2", "1"))
+
+tmp<- div_all_withanno %>%
+    group_by(TF, Species, num_bindingCons) %>%
+    mutate(num_bound_medianMeth=median(avgMethfilt)) %>%
+    group_by(TF, Species, cat) %>%
+    mutate(cat_medianMeth=median(avgMethfilt))
+
+
+avgMethevo <-  ggplot(tmp, aes(x=num_bindingCons, y=avgMethfilt, fill=binding))+
+  geom_boxplot(notch=TRUE, outlier.alpha=0.1)+
+  facet_grid(TF~Species, scales="free")+
+  theme_bw()+
+  theme(
+    text = element_text(size = 26),
+    axis.text = element_text(colour = "black"),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position="none")+
+    fillScale
+
+
+#+
+#scale_fill_gradient2(low="white", mid=muted("red"), high="red", midpoint = mean(merge$avgMethfilt))+
+avgMethevo
+ggsave(plot=avgMethevo, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_evo_cat_MethDistribution.pdf")
+```
+
+
+
+# 4D: Association Test
+
+
+
+```{r echo=FALSE, error=TRUE}
+
+merge <- merge %>%
+    mutate(Clusters=if_else(Clusters=="left", "specular", as.character(Clusters)),
+            Clusters=if_else(Clusters=="right", "specular", as.character(Clusters)))
+
+merge$Clusters_short=as.factor(merge$Clusters)
+merge$Clusters_short=factor(merge$Clusters, levels=c("flat", "specular","middle","up","NC"))
+
+# I need contingency table of clusters and evo divergence
+tf_vector<-c("CEBPA","CTCF","HNF6","HNF4a","FoxA1")
+sp_vector<-c("Human","Macaque","Mouse","Rat","Dog")
+
+pvals <-c()
+
+for (sp in sp_vector) {
+  for ( tf in tf_vector) {
+      #i=1+1
+    tab<-merge %>%
+        ungroup() %>%
+      select(Clusters,num_bindingCons,Species,TF) %>%
+      na.omit() %>%
+      filter(Species==sp) %>%
+      droplevels()
+
+    tfs<-levels(as.factor(tab$TF))
+    if (tf %in% tfs) {
+      tab <- tab %>%
+        filter(TF==tf) %>%
+      group_by(Clusters,num_bindingCons,Species) %>%
+      count() %>%
+      acast( num_bindingCons~Clusters, value.var="n") %>%
+      as.table()
+
+    title<-paste0("Species cons vs Clusters - ",tf," - ",sp)
+    gplots::balloonplot(t(tab), main =title, xlab ="", ylab="",
+              label = FALSE, show.margins = FALSE)
+
+    chisq <- chisq.test(tab)
+    tmp=c(tf, sp,chisq$p.value )
+    pvals<-rbind(pvals,tmp)
+
+    title<-paste0(tf," - ",sp)
+    p<- paste0("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CA/", title,".pdf")
+    association <- corrplot(chisq$residuals, is.cor = FALSE,title = title,  col = brewer.pal(10,'PRGn'))
+    pdf(p)
+    association
+    dev.off()
+    association
+
+    }
+  }
+}
+```
+
+
