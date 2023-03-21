@@ -33,6 +33,7 @@ else
     echo "ERROR: config file not provied"
     echo "$usageHelp"
     echo "$configHelp"
+    echo "$stageHelp"
     exit 1
 fi
 

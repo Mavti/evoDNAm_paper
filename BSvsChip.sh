@@ -10,8 +10,9 @@ helpHelp="* -h: print this help and exit"
 printHelpAndExit() {
     echo -e "$usageHelp"
     echo -e "$configHelp"
+    echo -e "$stageHelp"
     echo "$helpHelp"
-    exit 1
+    exit "$1"
 }
 
 unset polish
@@ -24,7 +25,6 @@ while getopts "c:s:p" opt; do
     esac
 done
 
-
 if [ ! -z "$config" ]
 then
     source $config
@@ -32,6 +32,7 @@ else
     echo "ERROR: config file not provied"
     echo "$usageHelp"
     echo "$configHelp"
+    echo "$usageHelp"
     exit 1
 fi
 ############# VARIABLES ###################
