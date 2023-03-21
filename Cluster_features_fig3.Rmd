@@ -15,7 +15,7 @@ knitr::opts_chunk$set(error = FALSE,
 ```
 
 ```{r echo=FALSE, include=FALSE, message=FALSE}
-
+renv::load("/hps/software/users/flicek/rimoldi/Scripts/EDMscripts")
 library("tidyverse")
 library("ggplot2")
 library("RColorBrewer")
@@ -85,7 +85,7 @@ fillScale <- scale_fill_manual(name = "Clusters",values = pal)
 colScale <- scale_colour_manual(name = "Clusters",values = pal)
 
 ## THEME
-theme_custom <- theme(
+theme_custom <- theme_bw()+theme(
         plot.title = element_text(hjust = 0.5, size=18),
       axis.title = element_text(size=16),
       axis.text = element_text(size=15),
@@ -94,7 +94,11 @@ theme_custom <- theme(
       panel.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      plot.margin=grid::unit(c(0,0,0,0), "mm"))
+      plot.margin=grid::unit(c(0,0,0,0), "mm"),
+      strip.background =element_blank(),
+      strip.text.x = element_text(size = 15),
+      strip.text.y = element_text(size = 15),
+       axis.line = element_line())
 
 ```
 
@@ -102,43 +106,6 @@ theme_custom <- theme(
 
 
 ```{r}
-###---------------------------------------------------------
-make_plots <- function(tmp, sp, tf) {
-  plots <- list()
-  plots[[1]] <- tmp %>%
-   melt() %>%
-   mutate(value=if_else(is.na(value), FALSE, TRUE)) %>%
-   dcast(variable~value) %>%
-   mutate(freq=`TRUE`/`FALSE`) %>%
-   ggplot( aes(variable, freq, group=1)) +
-    geom_line(colour="#389196", size=0.2) +
-    theme_custom +
-    theme(axis.text.x = element_blank(),
-         axis.title.y = element_blank()) +
-    ggtitle(tf) +
-    ylab("CpG frequency")+
-    xlab("Position")
-
-
-  plots[[2]] <- tmp %>%
-   melt() %>%
-   group_by(variable) %>%
-   summarise(avg=mean(value,na.rm = TRUE)) %>%
-   distinct() %>%
-   ggplot( aes(variable, avg)) +
-    geom_jitter(alpha=0.2, colour="salmon") +
-    ggtitle(tf) +
-    theme(axis.text.x = element_blank(),
-         axis.title.y = element_blank()) +
-    theme_custom +
-    ylab("Methylation %") +
-    xlab("Position")
-
-
-  return( plots )
-}
-
-###---------------------------------------------------------
 
 ## HUMAN
 CEBPA_Human <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChip/CpGandMeth_Matrixes/CEBPA_Human_Liver_MethMatrix.txt")
@@ -183,8 +150,50 @@ random_Dog <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/BSvsChi
 
 ```
 
+```{r}
+###---------------------------------------------------------
+make_plots <- function(tmp, sp, tf) {
+  plots <- list()
+  
+  plots[[1]] <- tmp %>%
+   melt() %>%
+   mutate(value=if_else(is.na(value), FALSE, TRUE)) %>%
+   dcast(variable~value) %>%
+   mutate(freq=`TRUE`/`FALSE`) %>%
+   ggplot( aes(variable, freq, group=1)) +
+    geom_line(colour="#389196", size=0.2) +
+    theme_custom +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+         axis.title = element_blank()) +
+    ggtitle(sp) 
+    #ylab("CpG frequency")+
+    #xlab("Position")
 
-```{r fig.width=15,fig.height=15, echo=FALSE, error=TRUE}
+
+  plots[[2]] <- tmp %>%
+   melt() %>%
+   group_by(variable) %>%
+   summarise(avg=mean(value,na.rm = TRUE)) %>%
+   distinct() %>%
+   ggplot( aes(variable, avg)) +
+    geom_jitter(alpha=0.2, colour="salmon") +
+    coord_cartesian(ylim = c(10,90))+
+    ggtitle(sp) +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+         axis.title = element_blank()) +
+    theme_custom 
+   # ylab("Methylation %") +
+    #xlab("Position")
+
+
+  return( plots )
+}
+
+###---------------------------------------------------------
+
+
 
 pl_CEBPA_human <- make_plots(CEBPA_Human, "Human", "CEBPA")
 pl_CTCF_human <- make_plots(CTCF_Human, "Human", "CTCF")
@@ -227,58 +236,268 @@ pl_random_Dog <- make_plots(random_Human, "Dog", "Random Region")
 
 ## CpG frequency profile
 
+
 ```{r fig.width=15,fig.height=15, echo=FALSE, error=TRUE}
+ #axis.line = element_line()
+cebpa_cpg <-
+  plot_grid(
+    pl_CEBPA_human[[1]] + coord_cartesian(ylim = c(0.0071, 0.02))+ theme(axis.line = element_line()),
+    pl_CEBPA_Macaque[[1]] + coord_cartesian(ylim = c(0.0071, 0.02))+ theme(axis.line = element_line(), axis.text.y=element_blank()),
+    pl_CEBPA_Mouse[[1]] + coord_cartesian(ylim = c(0.0071, 0.02))+ theme(axis.line = element_line(), axis.text.y=element_blank()),
+    pl_CEBPA_Rat[[1]] + coord_cartesian(ylim = c(0.0071, 0.02))+ theme(axis.line = element_line(), axis.text.y=element_blank()),
+    pl_CEBPA_Dog[[1]] + coord_cartesian(ylim = c(0.0071, 0.02))+ theme(axis.line = element_line(), axis.text.y=element_blank()),
+    nrow = 1
+  )
+y.grob <- textGrob("CEBPA", 
+                   gp=gpar( fontsize=18), rot=90)
+cebpa_cpg <- grid.arrange(arrangeGrob(cebpa_cpg, left = y.grob))
 
 
-Human_cpg <- plot_grid(pl_CEBPA_human[[1]], pl_HNF4a_human[[1]],pl_HNF6_human[[1]],pl_FoxA1_human[[1]],pl_CTCF_human[[1]],pl_random_Human[[1]], nrow = 1 )
-#Human
-Macaque_cpg <- plot_grid(pl_CEBPA_Macaque[[1]], pl_HNF4a_Macaque[[1]],pl_HNF6_Macaque[[1]],NULL, pl_CTCF_Macaque[[1]],pl_random_Macaque[[1]], nrow = 1 )
-#Macaque
-Mouse_cpg <- plot_grid(pl_CEBPA_Mouse[[1]], pl_HNF4a_Mouse[[1]],pl_HNF6_Mouse[[1]],pl_FoxA1_Mouse[[1]],pl_CTCF_Mouse[[1]],pl_random_Mouse[[1]], nrow = 1 )
-#Mouse
-Rat_cpg <- plot_grid(pl_CEBPA_Rat[[1]], pl_HNF4a_Rat[[1]],pl_HNF6_Rat[[1]],pl_FoxA1_Rat[[1]],pl_CTCF_Rat[[1]],pl_random_Rat[[1]], nrow = 1 )
-#Rat
-Dog_cpg <- plot_grid(pl_CEBPA_Dog[[1]], pl_HNF4a_Dog[[1]],NULL,pl_FoxA1_Dog[[1]],pl_CTCF_Dog[[1]],pl_random_Dog[[1]], nrow = 1 )
-#Dog
 
-cpg_profiles <- plot_grid( Macaque_cpg, Mouse_cpg, Rat_cpg, Dog_cpg, ncol=1)
+hnf4a_cpg <- plot_grid(
+  pl_HNF4a_human[[1]] + coord_cartesian(ylim = c(0.014, 0.034)) + theme(plot.title = element_blank(),axis.line = element_line()),
+  pl_HNF4a_Macaque[[1]] + coord_cartesian(ylim = c(0.014, 0.034))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_HNF4a_Mouse[[1]] + coord_cartesian(ylim = c(0.015, 0.034))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_HNF4a_Rat[[1]] + coord_cartesian(ylim = c(0.014, 0.034))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_HNF4a_Dog[[1]] + coord_cartesian(ylim = c(0.014, 0.034))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  nrow = 1
+)
+
+y.grob <- textGrob("HNF4A", 
+                   gp=gpar( fontsize=18), rot=90)
+hnf4a_cpg <- grid.arrange(arrangeGrob(hnf4a_cpg, left = y.grob))
+
+hnf6_cpg <- plot_grid(
+  pl_HNF6_human[[1]] + coord_cartesian(ylim = c(0.012, 0.028))+ theme(plot.title = element_blank(),axis.line = element_line()),
+  pl_HNF6_Macaque[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_HNF6_Mouse[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_HNF6_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  NULL,
+  nrow = 1
+)
+y.grob <- textGrob("HNF6", 
+                   gp=gpar(fontsize=18), rot=90)
+hnf6_cpg <- grid.arrange(arrangeGrob(hnf6_cpg, left = y.grob))
+
+foxa1_cpg <- plot_grid(
+  pl_FoxA1_human[[1]] + coord_cartesian(ylim = c(0.013, 0.025))+ theme(plot.title = element_blank(),axis.line = element_line()),
+  NULL,
+  pl_FoxA1_Mouse[[1]] + coord_cartesian(ylim = c(0.013, 0.025)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_FoxA1_Rat[[1]] + coord_cartesian(ylim = c(0.013, 0.025)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_FoxA1_Dog[[1]] + coord_cartesian(ylim = c(0.013, 0.025)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  nrow = 1
+  
+)
+
+y.grob <- textGrob("ONECUT1", 
+                   gp=gpar(fontsize=18), rot=90)
+foxa1_cpg <- grid.arrange(arrangeGrob(foxa1_cpg, left = y.grob))
+
+ctcf_cpg <- plot_grid(
+  pl_CTCF_human[[1]] + coord_cartesian(ylim = c(0.012, 0.040))+ theme(plot.title = element_blank(),axis.line = element_line()),
+  pl_CTCF_Macaque[[1]] + coord_cartesian(ylim = c(0.012, 0.040))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_CTCF_Mouse[[1]] + coord_cartesian(ylim = c(0.012, 0.040))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_CTCF_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.040)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_CTCF_Dog[[1]] + coord_cartesian(ylim = c(0.012, 0.040)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  nrow = 1
+)
+y.grob <- textGrob("CTCF", 
+                   gp=gpar( fontsize=18), rot=90)
+ctcf_cpg <- grid.arrange(arrangeGrob(ctcf_cpg, left = y.grob))
+
+random_cpg <- plot_grid(
+  pl_random_Human[[1]] + coord_cartesian(ylim = c(0.006, 0.020)) + theme(plot.title = element_blank(),axis.line = element_line()),
+  pl_random_Macaque[[1]] + coord_cartesian(ylim = c(0.006, 0.020))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_random_Mouse[[1]] + coord_cartesian(ylim = c(0.006, 0.020))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_random_Rat[[1]] + coord_cartesian(ylim = c(0.006, 0.020)) + theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  pl_random_Dog[[1]] + coord_cartesian(ylim = c(0.006, 0.020))+ theme(plot.title = element_blank(),axis.line = element_line(), axis.text.y=element_blank()),
+  nrow = 1
+  
+)
+y.grob <- textGrob("Random", 
+                   gp=gpar(fontsize=18), rot=90)
+random_cpg <- grid.arrange(arrangeGrob(random_cpg, left = y.grob))
+    
+#
+
+cpg_profiles <- plot_grid( cebpa_cpg,ctcf_cpg, hnf4a_cpg, hnf6_cpg,foxa1_cpg, random_cpg, 
+                           ncol=1)
 cpg_profiles
 
-ggsave(plot = cpg_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CpGfreqProfiles_allSpeciesAllTFs.pdf",width=15, height = 15)
+ggsave(plot = cpg_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CpGfreqProfiles_allSpeciesAllTFs.pdf",width=198, height = 143, units = "mm")
 
 ```
+
 
 ## Methylation frequency profile
 
-```{r fig.width=15,fig.height=15, echo=FALSE, error=TRUE}
-Human_meth <- plot_grid(pl_CEBPA_human[[2]], pl_HNF4a_human[[2]],pl_HNF6_human[[2]],pl_FoxA1_human[[2]],pl_CTCF_human[[2]],pl_random_Human[[2]], nrow = 1 )
-#Human
-Macaque_meth <- plot_grid(pl_CEBPA_Macaque[[2]], pl_HNF4a_Macaque[[2]],pl_HNF6_Macaque[[2]],NULL, pl_CTCF_Macaque[[2]],pl_random_Macaque[[2]], nrow = 1 )
-#Macaque
-Mouse_meth <- plot_grid(pl_CEBPA_Mouse[[2]], pl_HNF4a_Mouse[[2]],pl_HNF6_Mouse[[2]],pl_FoxA1_Mouse[[2]],pl_CTCF_Mouse[[2]],pl_random_Mouse[[2]], nrow = 1 )
-#Mouse
-Rat_meth <- plot_grid(pl_CEBPA_Rat[[2]], pl_HNF4a_Rat[[2]],pl_HNF6_Rat[[2]],pl_FoxA1_Rat[[2]],pl_CTCF_Rat[[2]],pl_random_Rat[[2]], nrow = 1 )
-#Rat
-Dog_meth <- plot_grid(pl_CEBPA_Dog[[2]], pl_HNF4a_Dog[[2]],NULL,pl_FoxA1_Dog[[2]],pl_CTCF_Dog[[2]],pl_random_Dog[[2]], nrow = 1 )
-#Dog
 
-meth_profiles <- plot_grid( Macaque_meth, Mouse_meth, Rat_meth, Dog_meth, ncol=1)
+
+```{r fig.width=15,fig.height=15, echo=F}
+
+cebpa_meth <-
+  plot_grid(
+    pl_CEBPA_human[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(),axis.line = element_line(),axis.text.x = element_blank()),
+    pl_CEBPA_Macaque[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(),axis.line = element_line(),axis.text = element_blank()),
+    pl_CEBPA_Mouse[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(),axis.line = element_line(),axis.text = element_blank()),
+    pl_CEBPA_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(),axis.line = element_line(),axis.text = element_blank()),
+    pl_CEBPA_Dog[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(),axis.line = element_line(),axis.text = element_blank()),
+    nrow = 1
+  )
+y.grob <- textGrob("CEBPA", 
+                   gp=gpar( fontsize=18), rot=90)
+cebpa_meth <- grid.arrange(arrangeGrob(cebpa_meth, left = y.grob))
+
+hnf4a_meth <- plot_grid(
+  pl_HNF4a_human[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text.x = element_blank()),
+  pl_HNF4a_Macaque[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_HNF4a_Mouse[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_HNF4a_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_HNF4a_Dog[[2]]+coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  nrow = 1
+)
+
+y.grob <- textGrob("HNF4A", 
+                   gp=gpar( fontsize=18), rot=90)
+hnf4a_meth <- grid.arrange(arrangeGrob(hnf4a_meth, left = y.grob))
+
+hnf6_meth <- plot_grid(
+  pl_HNF6_human[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text.x = element_blank()),
+  pl_HNF6_Macaque[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_HNF6_Mouse[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_HNF6_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  NULL,
+  nrow = 1
+)
+y.grob <- textGrob("HNF6", 
+                   gp=gpar(fontsize=18), rot=90)
+hnf6_meth <- grid.arrange(arrangeGrob(hnf6_meth, left = y.grob))
+
+foxa1_meth <- plot_grid(
+  pl_FoxA1_human[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text.x = element_blank()),
+  NULL,
+  pl_FoxA1_Mouse[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_FoxA1_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_FoxA1_Dog[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  nrow = 1
+  
+)
+
+y.grob <- textGrob("ONECUT1", 
+                   gp=gpar(fontsize=18), rot=90)
+foxa1_meth <- grid.arrange(arrangeGrob(foxa1_meth, left = y.grob))
+
+ctcf_meth <- plot_grid(
+  pl_CTCF_human[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text.x = element_blank()),
+  pl_CTCF_Macaque[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_CTCF_Mouse[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_CTCF_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_CTCF_Dog[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  nrow = 1
+)
+
+y.grob <- textGrob("CTCF", 
+                   gp=gpar(fontsize=18), rot=90)
+ctcf_meth <- grid.arrange(arrangeGrob(ctcf_meth, left = y.grob))
+
+random_meth <- plot_grid(
+  pl_random_Human[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text.x = element_blank()),
+  pl_random_Macaque[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_random_Mouse[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_random_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(), plot.title = element_blank(),axis.line = element_line(),axis.text = element_blank()),
+  pl_random_Dog[[2]] +coord_cartesian(ylim = c(10,90)) + theme(axis.title=element_blank(),axis.text = element_blank(),plot.title = element_blank(),axis.line = element_line()),
+  nrow = 1
+  
+)
+y.grob <- textGrob("Random", 
+                   gp=gpar(fontsize=18), rot=90)
+random_meth <- grid.arrange(arrangeGrob(random_meth, left = y.grob))
+    
+#
+
+meth_profiles <- plot_grid( cebpa_meth, ctcf_meth, hnf4a_meth, hnf6_meth,foxa1_meth, random_meth, 
+                           ncol=1)
 meth_profiles
 
-ggsave(plot = meth_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/MethfreqProfiles_allSpeciesAllTFs.pdf",width=15, height = 15)
+ggsave(plot = meth_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/MethProfiles_allSpeciesAllTFs.pdf",width=199, height = 132, units = "mm")
 
 ```
+
+
 
 ## Main figure
 ```{r fig.width=15,fig.height=8, echo=FALSE, error=TRUE}
 
-Human_cpgAndmeth_profiles <- plot_grid( Human_cpg, Human_meth, ncol=1)
-Human_cpgAndmeth_profiles
+rat_meth <-
+  plot_grid(
+    pl_CEBPA_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme( plot.title = element_blank(), axis.title = element_blank() ),
+    pl_HNF4a_Rat[[2]] +coord_cartesian(ylim = c(10,90)) + theme( plot.title = element_blank(), axis.title = element_blank()),
+    pl_HNF6_Rat[[2]] +coord_cartesian(ylim = c(10,90))+ theme( plot.title = element_blank(), axis.title = element_blank()),
+    pl_FoxA1_Rat[[2]] +coord_cartesian(ylim = c(10,90))+ theme( plot.title = element_blank(), axis.title = element_blank()),
+    pl_CTCF_Rat[[2]] + coord_cartesian(ylim = c(10,90))+ theme( plot.title = element_blank(), axis.title = element_blank()),
+    pl_random_Rat[[2]]+coord_cartesian(ylim = c(10,90))+ theme( plot.title = element_blank(), axis.title = element_blank()),
+    nrow = 1
+  )
 
-ggsave(plot = Human_cpgAndmeth_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Human_MethAndCpGfreqProfiles.pdf",width=15, height = 8)
+rat_cpg <-
+  plot_grid(
+    pl_CEBPA_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank()) ,
+    pl_HNF4a_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank()),
+    pl_HNF6_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank()),
+    pl_FoxA1_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank()),
+    pl_CTCF_Rat[[1]] + coord_cartesian(ylim = c(0.012, 0.028)) + theme(plot.title = element_blank()),
+    pl_random_Rat[[1]] + coord_cartesian(ylim = c(0.007, 0.028)) + theme(plot.title = element_blank()),
+    nrow = 1
+  )
+
+
+
+Rat_cpgAndmeth_profiles <- plot_grid( rat_cpg, rat_meth, ncol=1)
+Rat_cpgAndmeth_profiles
+
+ggsave(plot = Rat_cpgAndmeth_profiles, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Rat_MethAndCpGfreqProfiles.pdf",width=15, height = 8)
 
 ```
 
+
+## Revisions: enhancers?
+
+```{r}
+
+macaque_enh <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/Enhancers_avgProfiles/Macaque_Liver_MethMatrix.txt")
+mouse_enh <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/Enhancers_avgProfiles/Mouse_Liver_MethMatrix.txt")
+rat_enh <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/Enhancers_avgProfiles/Rat_Liver_MethMatrix.txt")
+dog_enh <- read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/Enhancers_avgProfiles/Dog_Liver_MethMatrix.txt")
+
+
+pl_Macaque_enh <- make_plots(dog_enh, "Macaque", "H3K27ac")
+pl_Mouse_enh <- make_plots(dog_enh, "Mouse", "H3K27ac")
+pl_Rat_enh <- make_plots(dog_enh, "Rat", "H3K27ac")
+pl_Dog_enh <- make_plots(dog_enh, "Dog", "H3K27ac")
+
+enh_meth <-
+  plot_grid(
+    pl_Macaque_enh[[2]] +coord_cartesian(ylim = c(10,90)) + theme( plot.title = element_blank(), axis.title = element_blank(), axis.text.x = element_blank() ),
+    pl_Mouse_enh[[2]] +coord_cartesian(ylim = c(10,90)) + theme( plot.title = element_blank(), axis.title = element_blank(), axis.text = element_blank()),
+    pl_Rat_enh[[2]] +coord_cartesian(ylim = c(10,90))+ theme( plot.title = element_blank(), axis.title = element_blank(),axis.text = element_blank()),
+    pl_Dog_enh[[2]] +coord_cartesian(ylim = c(10,90))+ theme( plot.title = element_blank(), axis.title = element_blank(),axis.text = element_blank()),
+    nrow = 1, rel_widths = c(1,0.7,0.7,0.7)
+  )
+
+enh_cpg <-
+  plot_grid(
+    pl_Macaque_enh[[1]] + coord_cartesian(ylim = c(0.010, 0.028)) ,
+    pl_Mouse_enh[[1]] +theme(axis.text = element_blank()) + coord_cartesian(ylim = c(0.010, 0.028) ) ,
+    pl_Rat_enh[[1]] +theme(axis.text = element_blank()) + coord_cartesian(ylim = c(0.010, 0.028)) ,
+    pl_Dog_enh[[1]] +theme(axis.text = element_blank()) + coord_cartesian(ylim = c(0.010, 0.028)) ,
+    nrow = 1, rel_widths = c(1,0.7,0.7,0.7)
+  )
+
+
+
+Enh_cpgAndmeth_profiles <- plot_grid( enh_cpg, enh_meth, ncol=1)
+Enh_cpgAndmeth_profiles
+```
 
 # Fig 3B: Clustered methylation profiles
 
@@ -313,7 +532,7 @@ tot_plot <- ggplot(count,aes(x=Clusters,y=tot_count/1000, fill=Clusters))+
   theme_custom +
   facet_grid(TF~Species, scales="free")
 
-ggsave(plot = tot_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_counts_inCluster.pdf",width=9, height = 18)
+#ggsave(plot = tot_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/pk_counts_inCluster.pdf",width=9, height = 18)
 
 tot_plot
 ```
@@ -395,7 +614,7 @@ for (sp in c("Human", "Macaque","Mouse","Rat","Dog") ) {
             }
         }
         tmp.results=as.tibble(tmp.results)
-        colnames(tmp.results)=c("TF", "Species", "Cluster", "RegRegion", "p.value")
+        colnames(tmp.results)=c("TF", "Species", "Clusters", "RegRegion", "p.value")
         tmp.results$p.value=as.numeric(tmp.results$p.value)
         #print(tmp.results)
         tmp.results$p.value.adj=p.adjust(tmp.results$p.value, method="bonferroni")
@@ -406,6 +625,8 @@ for (sp in c("Human", "Macaque","Mouse","Rat","Dog") ) {
 results$p.value.adj=as.numeric(results$p.value.adj)
 filt=results[which(results$p.value.adj < 0.05),]
 kable(filt)
+
+results
 ```
 
 
@@ -444,7 +665,7 @@ alphaScale <- scale_alpha_manual(name = "RegRegion",values = val)
 
 Selected for Figure  
 
-```{r fig.width=15,fig.height=5, echo=FALSE, error=TRUE}
+```{r fig.width=15,fig.height=5, echo=FALSE, error=TRUE, eval=FALSE}
 sel <- selected %>%
   drop_na("Clusters") %>% 
   group_by(Clusters,TF,Species) %>%
@@ -470,12 +691,12 @@ sel <- selected %>%
     facet_grid(~Species, scales="free")
 sel
 
-ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_sel.pdf",width=10, height = 5)
+#ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_sel.pdf",width=10, height = 5)
 ```
 
 CTCF  
 
-```{r fig.width=7,fig.height=5, echo=FALSE, error=TRUE}
+```{r fig.width=7,fig.height=5, echo=FALSE, error=TRUE, eval=FALSE}
 sel_noCTCF <- selected %>%
   drop_na("Clusters") %>% 
   group_by(Clusters,TF,Species) %>%
@@ -499,39 +720,59 @@ sel_noCTCF <- selected %>%
         axis.title.y = element_blank())+
     facet_grid(~Species, scales="free")
 sel_noCTCF
-ggsave(plot = sel_noCTCF, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_CTCF.pdf",width=10, height = 5)
+#ggsave(plot = sel_noCTCF, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_CTCF.pdf",width=10, height = 5)
 ```
 
 
 
 ### Supp: all TFs and Species
 
+
+
 ```{r fig.width=15,fig.height=18, echo=FALSE, error=TRUE}
 
-rr_plot <- RegReg %>%
-    filter(RegRegion !="noOverlap") %>%
-    mutate(Percentage=Fraction*100) %>% 
-    ggplot( aes(x=Clusters , y=Fraction, fill=RegRegion))+
-      geom_bar(position="stack", stat="identity", size=0.1, colour="black")+
-      scale_fill_brewer(palette = "Set3") +
-      coord_flip()+
-      ylab("Fraction") +
-      ggtitle("Overlap with Regulatory Regions") +
-      theme_pubclean()  +
-      facet_grid(TF~Species, scales="free")+
-      theme_custom+
-      theme(
-          axis.title.y = element_blank())+
+ rr_plot <- RegReg %>%
+  filter(RegRegion !="noOverlap") %>%
+  left_join(., results) %>% 
+  mutate(sign=if_else(p.value.adj<0.05, "*", "")) %>% 
+    mutate(Clusters=factor(Clusters, rev(c("flat","right","left", "middle","up", "NC"))),
+           RegRegion=factor(RegRegion, c("Promoters", "Enhancers", "primedEnhancers"))) %>% 
+    ggplot( aes(x=Clusters , y=Fraction, fill=Clusters, alpha=RegRegion))+
+    coord_flip()+
+    geom_col( size=0.2, colour="black")+
+    geom_text(aes(label = sign))+
+    fillScale+
+    alphaScale+
+    theme_bw()  +
+    ylab("Fraction") +
+    ggtitle("Overlap with Regulatory Regions") +
+    theme_custom+
+    theme( axis.title.y = element_blank())+
   facet_grid(TF~Species, scales="free")
 
 
 rr_plot
 
-ggsave(plot = rr_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_all.pdf",width=10, height = 5)
+#ggsave(plot = rr_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/RegRegions_byCluster_all.pdf",width=163, height = 96, unit="mm")
 ```
 
-
 # Fig 3D
+
+```{r}
+## PALETTE
+pal=brewer.pal(6,"Pastel2")
+display.brewer.pal(5,"Pastel2")
+pal[6]="grey"
+palfinal <- c(rep(brewer.pal(5,"Pastel2"),23)) # temporary 21
+#length(palfinal) , fill=palfinal
+names(pal) <- c("up",  "middle",  "left", "right", "flat" )
+fillScale <- scale_fill_manual(name = "Clusters",values = pal)
+colScale <- scale_colour_manual(name = "Clusters",values = pal)
+
+palette<-c("#009966", "#CC3399", "#99CC33", "#6666CC", "#CC6600" )
+names(palette)<-c("flat","middle", "up", "left" , "right" )
+colScale <- scale_colour_manual(name = "Clusters",values = palette)
+```
 
 # 8. DISTANCE FROM TSSs
 
@@ -539,39 +780,49 @@ ggsave(plot = rr_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/ED
 
 
 TSSdist<-ggplot(tab, aes(x=DistanceTSS,colour=Clusters))+
-    stat_ecdf(geom = "step",) +
-    colScale +
-    coord_cartesian( xlim=c(0,50000)) +
-    fillScale +
-    theme_bw() +
+    colScale+
+    stat_ecdf(geom = "step", alpha=1) +
     xlab("Distance from the nearest TSS")+
-    scale_x_continuous(limits = c(0, 75000), breaks = seq(0, 50000, by = 10000))+
+    scale_x_continuous(trans="log10", labels = label_number( suffix = "k", scale = 1e-3, big.mark = ","))+
     theme_custom+
     facet_grid(TF~Species, scales="free")
 TSSdist
 
-ggsave(plot = TSSdist, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSdistance_byCluster_all.pdf",width=20, height = 25)
+ggsave(plot = TSSdist, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSdistance_byCluster_all_log.pdf",width=20, height = 35)
 
 ```
 
-```{r eval=FALSE}
-sel <- selected %>%
+```{r fig.width=15, fig.height=7}
+sel <- tab %>% 
+  filter( (TF=="CEBPA" & Species=="Rat") |
+          (TF=="CTCF" & Species=="Macaque") |
+          (TF=="FoxA1" & Species=="Mouse")) %>% 
     ggplot( aes(x=DistanceTSS,colour=Clusters))+
     stat_ecdf(geom = "step") +
+    #geom_vline(xintercept = 5000)+
     colScale +
-    coord_cartesian( xlim=c(0,50000)) +
-    theme_bw() +
+    scale_x_continuous(trans="log10", labels = label_number( suffix = "k", scale = 1e-3, big.mark = ","))+
     xlab("Distance from the nearest TSS")+
-    scale_x_continuous(limits = c(0, 75000), breaks = seq(0, 50000, by = 10000))+
     theme_custom+
-    theme(
-            legend.position="none")+
+    #theme(legend.position="none")+
     facet_grid(~Species, scales="free")
 sel
-#ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSdistance_byCluster_sel.pdf",width=10, height = 5)
+ggsave(plot = sel, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSdistance_byCluster_sel.pdf",width=10, height = 5)
 ```
 
+# Methylome fragments
 
+```{r}
+meth_frag <- tab %>% 
+  ggplot( aes(x=Clusters, fill=MethFrag)) +
+  geom_bar(position="fill" )+
+  scale_fill_manual(values = c("red2", "orange1", "yellow"))+
+  coord_flip()+
+  theme_custom +
+  facet_grid(TF~Species, scales="free")
+
+ggsave(plot = meth_frag, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/MethFrag_clusters_allSp_allTFs.pdf",width=142, height = 100, unit="mm")
+```
 
 # More Supplementary Figures
 
@@ -882,3 +1133,5 @@ ggplot(selected,aes(x=Clusters, y=log2(foldE), fill=Clusters)) +
             legend.position = "none")+
       facet_grid(~Species, scales="free")
 ```
+
+

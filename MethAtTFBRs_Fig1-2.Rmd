@@ -9,13 +9,14 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(error = FALSE,
+knitr::opts_chunk$set(error = TRUE,
                       warning = FALSE,
                       message = FALSE)
 ```
 
 ```{r libraries, include=FALSE}
-
+renv::load("/hps/software/users/flicek/rimoldi/Scripts/EDMscripts")
+library("ggpubr")
 library("ggplot2")
 library("tidyverse")
 library("stringr")
@@ -27,6 +28,7 @@ library("RColorBrewer")
 library("knitr")
 library("ggtree")
 library("gggenomes")
+library("MatchIt")
 ```
 
 
@@ -36,14 +38,20 @@ theme_custom <- theme_bw() + theme(
         plot.title = element_text(hjust = 0.5, size=18),
       axis.title = element_text(size=16),
       axis.text = element_text(size=15),
+      strip.background =element_blank(),
+      strip.text.x = element_text(size = 15),
+      strip.text.y = element_text(size = 15),
       legend.title = element_text(size=16),
       legend.text = element_text(size=15),
       panel.background = element_blank(),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      plot.margin=grid::unit(c(0,0,0,0), "mm"))
+      panel.grid.minor = element_blank())
+#panel.grid.major = element_blank()
 
 pal=brewer.pal(5,"Set1")
+
+names(pal) <- c("Human", "Macaque", "Mouse", "Rat", "Dog")
+fillScale <- scale_fill_manual(name = "Species",values = pal)
+colScale <- scale_colour_manual(name = "Species",values = pal)
 
 ```
 
@@ -74,7 +82,7 @@ p2 <- p1 %>% add_links(epo_links) %>%
  flip(3:4)
 
 p2
-ggsave(plot=p2, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/synteny.pdf",width = 15)
+#ggsave(plot=p2, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/synteny.pdf",width = 15)
 
 ```
 
@@ -109,7 +117,7 @@ meth_pl=meth_data %>%
 meth_pl
 width=epo_seqs$length[which(epo_seqs$seq_id=="Human")]/1000
 
-ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_human_ex1_ext.pdf", width = width, height = 1)
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_human_ex1_ext.pdf", width = width, height = 1)
 
 # Macaque
 meth_pl=meth_data %>% 
@@ -122,7 +130,7 @@ meth_pl=meth_data %>%
 meth_pl
 width=epo_seqs$length[which(epo_seqs$seq_id=="Macaque")]/1000
 
-ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_macaque_ex1_ext.pdf", width = width,height = 1 )
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_macaque_ex1_ext.pdf", width = width,height = 1 )
 
 # Mouse
 meth_pl=meth_data %>% 
@@ -135,7 +143,7 @@ meth_pl=meth_data %>%
 meth_pl
 width=epo_seqs$length[which(epo_seqs$seq_id=="Mouse")]/1000
 
-ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_mouse_ex1_ext.pdf", width = width,height = 1)
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_mouse_ex1_ext.pdf", width = width,height = 1)
 
 # Rat
 meth_pl=meth_data %>% 
@@ -148,7 +156,7 @@ meth_pl=meth_data %>%
 meth_pl
 width=epo_seqs$length[which(epo_seqs$seq_id=="Rat")]/1000
 
-ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_rat_ex1_ext.pdf", width = width,height = 1)
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_rat_ex1_ext.pdf", width = width,height = 1)
 
 # Dog
 meth_pl=meth_data %>% 
@@ -161,10 +169,91 @@ meth_pl=meth_data %>%
 meth_pl
 width=epo_seqs$length[which(epo_seqs$seq_id=="Dog")]/1000
 
-ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_dog_ex1_ext.pdf", width = width,height = 1)
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_dog_ex1_ext.pdf", width = width,height = 1)
 ```
 
+```{r fig.width=10, fig.height=2}
+meth_data=c()
+species=c("human", "macaque", "mouse", "rat", "dog")
+for (sp in species) {
+  path_fl=paste0("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_ex1_ext_", sp,".bed")
+  sp=str_to_title(sp) 
+  meth_data <- read.table(path_fl, header = F) %>% 
+  rename(chr=V1, start=V2, meth=V4) %>% 
+  mutate(seq_id=sp) %>% 
+  select(seq_id, chr, start, meth) %>% 
+  left_join(.,epo_seqs_raw, by="seq_id") %>% 
+  mutate(rel_start=start.x-as.numeric(start.y)) %>% 
+  select(seq_id, rel_start, seq_id, meth, length) %>% 
+  rbind(.,meth_data)
+}
+head(meth_data)
 
+# Human
+meth_pl=meth_data %>% 
+  filter(seq_id=="Human") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Human")]/1000
+
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_human_ex1_ext.pdf", width = width, height = 1)
+
+# Macaque
+meth_pl=meth_data %>% 
+  filter(seq_id=="Macaque") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Macaque")]/1000
+
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_macaque_ex1_ext.pdf", width = width,height = 1 )
+
+# Mouse
+meth_pl=meth_data %>% 
+  filter(seq_id=="Mouse") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Mouse")]/1000
+
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_mouse_ex1_ext.pdf", width = width,height = 1)
+
+# Rat
+meth_pl=meth_data %>% 
+  filter(seq_id=="Rat") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point(aes(colour=meth), size=4, alpha=0.7)+
+  scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Rat")]/1000
+
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_rat_ex1_ext.pdf", width = width,height = 1)
+
+# Dog
+meth_pl=meth_data %>% 
+  filter(seq_id=="Dog") %>% 
+  ggplot( aes(x=rel_start, y=meth)) +
+  geom_point( size=4, alpha=0.7)+
+  #scale_colour_gradient(low = "yellow", high = "red")+ #geom_point(shape = 21,size = 6,colour = "grey77")+
+  theme_classic()
+
+meth_pl
+width=epo_seqs$length[which(epo_seqs$seq_id=="Dog")]/1000
+
+#ggsave(plot=meth_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1A/meth_dog_ex1_ext.pdf", width = width,height = 1)
+```
 
 # Fig1B: Covered CpGs in Genomes
 
@@ -186,16 +275,16 @@ for (fl in cpgReport_files){
 
 }
 
-final <- final %>%
-    mutate(perc=covered*100/total)
-
-
-final$Species=as.factor(final$Species)
-final$Species=factor(final$Species, c("Human", "Macaque", "Mouse", "Rat", "Dog"))
-
-names(pal) <- levels(final$Species)
-fillScale <- scale_fill_manual(name = "Species",values = pal)
-colScale <- scale_colour_manual(name = "Species",values = pal)
+# final <- final %>%
+#     mutate(perc=covered*100/total)
+# 
+# 
+# final$Species=as.factor(final$Species)
+# final$Species=factor(final$Species, c("Human", "Macaque", "Mouse", "Rat", "Dog"))
+# 
+# names(pal) <- levels(final$Species)
+# fillScale <- scale_fill_manual(name = "Species",values = pal)
+# colScale <- scale_colour_manual(name = "Species",values = pal)
 
 cpgIngenomes <- ggplot(final, aes(x = Species, y = perc, fill=Species, size=covered)) +
   geom_point( shape = 21, colour = "black") +
@@ -216,7 +305,7 @@ cpgIngenomes <- ggplot(final, aes(x = Species, y = perc, fill=Species, size=cove
 #  scale_size_area(max_size = 20)+
 cpgIngenomes
 
-ggsave(plot=cpgIngenomes, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CoveredCpGsinGenomes.pdf")
+#ggsave(plot=cpgIngenomes, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CoveredCpGsinGenomes.pdf")
 
 ```
 
@@ -230,7 +319,7 @@ load("/hps/software/users/flicek/rimoldi/Scripts/EvoDNAmeth/PlotAndAnalysis/CpGm
 
 genomicMeth <- genomewide + xlab("Methylation") + colScale
 genomicMeth
-ggsave(plot=genomicMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_genomicMeth_densityDistribution.pdf")
+#ggsave(plot=genomicMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_genomicMeth_densityDistribution.pdf")
 
 ```
 
@@ -244,38 +333,24 @@ TFBRvsTFBS <- plot +
                        breaks=c(-100,-50,0,50,100),
                        labels=c("100","50","0","50","100")) +
     ylab("       % Binding sites          % Binding Regions") +
-        theme( text = element_text(size = 26),
-          axis.text = element_text(colour = "black"),
-          axis.text.y = element_blank(),
-          axis.title.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          legend.title = element_text(size=22),
-          legend.text = element_text(size=20),
-          panel.background = element_blank(),
-          panel.grid.minor = element_blank()) +
+        theme_custom +
           fillScale
 
 TFBRvsTFBS
-ggsave(plot=TFBRvsTFBS, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CpGs_TFBRvsTFBS.pdf")
+#ggsave(plot=TFBRvsTFBS, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CpGs_TFBRvsTFBS.pdf")
 
 ```
 
-# Fig2B: CpGs in TFBRs
 
-## histogram of CpGs
 
-```{r cpgHist, fig.width=7,fig.height=10, echo=FALSE, error=TRUE , message=FALSE}
-ggplot(BindingRegions, aes(nCpGtot))+
-    geom_histogram()+
-    facet_wrap(~Species, scales="free")
-```
 
-## density of CpGs
+
+## Supplementary: density of CpGs
 ```{r cpgDensity2, fig.width=8,fig.height=8, echo=FALSE, error=TRUE }
-CpGdensTFBR<- ggplot(BindingRegions, aes(x=nCpGtot, y=TF, colour=Species, fill=Species))+
+CpGdensTFBR<- ggplot(BindingRegions, aes(x=nCpGtot, y=TF, colour=Species))+
     geom_density_ridges(
         bandwidth = 0.6,
-        alpha=0.1,
+        alpha=0,
         size=2,
         scale=1)+
     scale_x_continuous(trans = "log1p",breaks = c(0, 5, 20, 80)) +
@@ -287,7 +362,7 @@ CpGdensTFBR<- ggplot(BindingRegions, aes(x=nCpGtot, y=TF, colour=Species, fill=S
       panel.background = element_blank()) +
       colScale
 CpGdensTFBR
-ggsave(plot=CpGdensTFBR, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_CpGdensity_TFBR.pdf")
+#ggsave(plot=CpGdensTFBR, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_CpGdensity_TFBR.pdf")
 
 ```
 
@@ -302,10 +377,11 @@ theme( text = element_text(size = 26),
 ```
 
 
+
 # Fig2C: Average methylation distribution  within TFBRs
 
 
-```{r avgMeth, fig.width=15,fig.height=7, echo=FALSE, error=TRUE}
+```{r avgMeth, fig.width=15,fig.height=7 }
 #rm(list=ls())
 table=read.table("/nfs/research/flicek/user/rimoldi/Projects/EDM/FinalTables/Tables/allSpecies_allTFs.tab")
 colnames(table)=c("chr","start","end","summit","foldE", "pval","nCpGtot",	"nCpGfilt",	"avgMethtot",	"avgMethfilt",
@@ -316,21 +392,907 @@ table$Species=as.factor(table$Species)
 table$Species=factor(table$Species, c("Human", "Macaque", "Mouse", "Rat", "Dog"))
 table$TF=as.factor(table$TF)
 table$TF=factor(table$TF, c("CTCF", "CEBPA", "HNF6", "HNF4a", "FoxA1"))
+```
 
+```{r avgMeth, fig.width=15,fig.height=7 }
 
 avgMeth<-ggplot(table, aes(x=TF,y=avgMethfilt, color=Species))+
   geom_violin(fill="grey", alpha=0.3)+
   facet_grid(~Species, scales="free")+
-  theme_bw()+
-  theme( text = element_text(size = 26),
-    axis.text = element_text(colour = "black"),
-    axis.title.y=element_blank(),
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank())+
+  theme_custom+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        panel.grid.major = element_blank())+
     ylab("Avg Methylation %")+
     colScale
 
 avgMeth
-ggsave(plot=avgMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_avgMethDistribution_TFBR.pdf")
+#ggsave(plot=avgMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_avgMethDistribution_TFBR.pdf")
+
+avgMeth <- ggplot(table, aes(x=TF,y=avgMethfilt, color=Species))+
+  geom_violin(fill="grey", alpha=0.3)+
+  facet_grid(~Species, scales="free")+
+  theme_custom+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        panel.grid.major = element_blank())+
+    scale_y_continuous(trans = "log1p")+
+    ylab("Avg Methylation %")+
+    geom_hline(yintercept = 60, colour="grey",linetype="dashed")+
+    colScale
+
+avgMeth
+#ggsave(plot=avgMeth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_AllTFs_avgMethDistribution_TFBR_log.pdf")
 ```
+
+
+## bimodality
+
+```{r}
+library("multimode")
+
+Sp_tf_list <- table %>% 
+  select(Species, TF) %>% 
+  unite(col = "sp_tf", sep="_") %>% 
+  distinct() %>% pull()
+
+cebpa_list <- Sp_tf_list[grepl("CEBPA",Sp_tf_list)]
+ctcf_list <- Sp_tf_list[grepl("CTCF",Sp_tf_list)]
+
+
+pvals=c()
+modes=c()
+calculate_modes=c()
+model=c()
+i=1
+
+for(sp_tf in Sp_tf_list) {
+  sp = str_split(sp_tf, "_")[[1]][1]
+  tf = str_split(sp_tf, "_")[[1]][2]
+  
+  tab_tmp <- table %>%
+    mutate(meth = log(avgMethfilt + 1)) %>%
+    filter(Species == sp, TF == tf)
+  
+  tmp = modetest(tab_tmp$meth)
+  tmp_line = c(tf, sp, tmp$p.value)
+  pvals <- rbind(tmp_line, pvals)
+  
+  
+  calculate_modes[[i]] <-
+    locmodes(
+      tab_tmp$meth,
+      mod0 = 2,
+      display = F,
+      ylab = paste0("density (", sp_tf, ")")
+    )
+  
+  modes <-
+    rbind(modes, c(sp, tf, calculate_modes[[i]]$locations))
+  
+  i = i + 1
+}
+
+
+modes <- modes %>% as.data.frame() %>% distinct() %>% 
+  rename("Species"=V1, "TF"=V2, "mode1"=V3, "antimode"=V4, "mode2"=V5)
+pvals <- pvals %>% as.data.frame() %>% 
+  rename("Species"=V2, "TF"=V1, "pvalue"=V3) 
+
+save.image("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2.RData")
+```
+
+
+```{r}
+
+
+#load("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2.RData")
+
+## Macaque CTCF resulted to be different as it has also peak very close to zero
+## which results to be the second mode.
+## I am going to localize 3 modes for it and only use the first and the third
+modes <- modes %>%
+  filter(!(TF == "CTCF" & Species == "Macaque"))
+pvals <- pvals %>% as.data.frame() %>%
+  filter(!(TF == "CTCF" & Species == "Macaque"))
+
+
+sp = "Macaque"
+tf = "CTCF"
+sp_tf = "Macaque_CTCF"
+i <- match(sp_tf, Sp_tf_list) # get index of Macaque_CTCF in list
+
+tab_tmp <- table %>%
+  mutate(meth = log(avgMethfilt + 1)) %>%
+  filter(Species == sp, TF == tf)
+
+tmp = modetest(tab_tmp$meth)
+tmp_line = c(tf, sp, tmp$p.value)
+pvals <- rbind(tmp_line, pvals)
+
+
+calculate_modes[[i]] <-
+  locmodes(
+    tab_tmp$meth,
+    mod0 = 3,
+    display = F,
+    ylab = paste0("density (", sp_tf, ")")
+  )
+
+modes_tmp <-  c(sp, tf, calculate_modes[[i]]$locations)
+modes_filt <- modes_tmp[c(1:4, 7)]
+modes <- rbind(modes_filt, modes)
+
+#plot(calculate_modes[[2]])
+modes_exp <- modes %>%
+  mutate(
+    mode1 = as.numeric(mode1),
+    mode1 = exp(mode1),
+    antimode = as.numeric(antimode),
+    antimode = exp(antimode),
+    mode2 = as.numeric(mode2),
+    mode2 = exp(mode2)
+  ) %>%
+  arrange(TF)
+
+write_csv(modes_exp, file = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/modes.txt", col_names = T )
+
+save.image("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2.RData")
+```
+
+
+panel all plots with modes
+
+```{r fig.width=25, fig.height=20}
+Sp_tf_list_ordered <-
+  append(Sp_tf_list, c("Dog_HNF6", "Macaque_FoxA1"))
+
+# reorder sp_tf in the order you want them to appear in plot
+Sp_tf_list_ordered <- Sp_tf_list_ordered %>% as.data.frame() %>%
+  separate(".", c("sp", "tf"), sep = "_", remove = F) %>%
+  mutate(tf = factor(tf, c("CTCF", "CEBPA", "HNF6", "HNF4a", "FoxA1")),
+         sp = factor(sp, c("Human", "Macaque", "Mouse", "Rat", "Dog"))) %>%
+  arrange(sp, tf) %>%
+  pull(".")
+
+par(mfrow = c(5, 5)) # define the grid
+for (sp_tf in Sp_tf_list_ordered) {
+  if (sp_tf == "Dog_HNF6" | sp_tf == "Macaque_FoxA1") {
+    plot(0,
+         type = 'n',
+         axes = FALSE,
+         ann = FALSE)
+  } else{
+    i <- match(sp_tf, Sp_tf_list)
+    plot(calculate_modes[[i]], ylab = paste0("density (", Sp_tf_list[i], ")"))
+    #mtext(letters[i], side = 3, line = -1, adj = 0.1, cex = 0.6)
+  }
+  
+}
+
+save.image("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2.RData")
+```
+
+
+
+
+
+## Matched controls 
+
+```{r}
+load("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2.RData")
+```
+
+methylation threshold 
+
+```{r fig.width=10, fig.height=5}
+ggplot(table, aes(x=TF,y=avgMethfilt, color=Species))+
+  geom_violin(fill="grey", alpha=0.3)+
+  facet_grid(~Species, scales="free")+
+  theme_custom+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        panel.grid.major = element_blank())+
+    scale_y_continuous(trans = "log1p", breaks = c(0, 25, 50, 75, 100))+
+    ylab("Avg Methylation %")+
+  geom_hline(yintercept = 60, colour="grey",linetype="dashed")+
+    colScale
+
+```
+
+what fraction of TFBRs has methylation above threshold?
+
+```{r fig.width=10, fig.height=5}
+table %>% 
+  mutate(meth_cat=if_else(avgMethfilt>=60, "hyper", "hypo")) %>% 
+  group_by(Species, TF, meth_cat) %>% 
+  summarise(n=n()) %>% 
+  mutate(freq=n/sum(n)) %>% 
+  filter(meth_cat=="hyper",n>200) %>% 
+  ggplot( aes(x=TF, y=freq, label=n, colour=TF) ) + 
+  geom_point(size=4) +
+  geom_text( hjust=0.4, vjust=-2)+
+  coord_cartesian(ylim = c(0,0.32))+
+  scale_y_continuous(labels = scales::percent_format())+
+  ylab("% hypermethylated TFBRs")+
+  theme_custom+
+  facet_grid(~Species) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position = "none",
+        axis.title.x = element_blank()) 
+  
+filter_out <- c("Macaque_CEBPA", "Macaque_HNF6", "Macaque_FoxA1", "Dog_HNF6", "Dog_FoxA1")  
+
+```
+
+Match it!
+
+```{r}
+
+match_TFBRs <- function(sp, tf, table) {
+  # Check Initial Imbalance
+  ## Good balance indicators:
+  ## standardized mean differences and eCDF statistics ~ 0
+  ## variance ratios ~ 1
+  match_tab <- table %>%
+    filter(Species == sp, TF == tf) %>%
+    select(Species, TF, avgMethfilt, nCpGtot, foldE , DistanceTSS) %>%
+    mutate(meth_cat = if_else(avgMethfilt >= 60, 1, 0))
+  
+  m.out0 <-
+    matchit(
+      meth_cat ~ nCpGtot + foldE + DistanceTSS,
+      data = match_tab,
+      method = NULL,
+      distance = "glm"
+    )
+  
+  
+  # Matching with caliper
+  m.out2 <-
+    matchit(
+      meth_cat ~ nCpGtot + foldE + DistanceTSS,
+      data = match_tab,
+      method = "nearest",
+      distance = "glm",
+      caliper = 0.001
+    )
+  
+  ## summary of covariate balance after matching.
+  ## Std. Pair Diff:  average absolute within-pair difference of each covariate
+  ## better balance when it is small
+  #summary(m.out2, un = FALSE)
+  
+  return(m.out2)
+  
+}
+
+#prova <- c("Mouse_CTCF", "Rat_CTCF")
+matchit_otps <- vector(mode = "list", length = length(Sp_tf_list))
+for (sp_tf in Sp_tf_list) {
+  print(sp_tf)
+  i <- match(sp_tf, Sp_tf_list)
+  sp = str_split(sp_tf, "_")[[1]][1]
+  tf = str_split(sp_tf, "_")[[1]][2]
+  matchit_otps[[i]] <- match_TFBRs(sp, tf, table)
+}
+names(matchit_otps) <- Sp_tf_list
+
+save.image("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2_2.RData")
+# load("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2.RData")
+#mouse_otps$a
+```
+
+
+```{r eval=FALSE}
+## SUMMARY STATISTICS PLOTS
+out_sum <- summary(matchit_otps$Mouse_CTCF, addlvariables = ~ I(nCpGtot^2) + I(foldE^2) + I(DistanceTSS^2) )
+#Love plot (to assess balance before and after Matching)
+plot(out_sum, var.order = "unmatched")
+#eQQ plot
+plot(matchit_otps$Mouse_CTCF, type = "qq", which.xs = ~nCpGtot + foldE + DistanceTSS)
+#eCDF plot
+plot(matchit_otps$Mouse_CTCF, type = "ecdf", which.xs = ~nCpGtot + foldE + DistanceTSS)
+#
+plot(matchit_otps$Mouse_CTCF, type = "jitter", interactive = FALSE)
+# density
+plot( matchit_otps$Mouse_CTCF, type = "density", interactive = FALSE)
+
+```
+
+write otp and get the intersection with TEs
+
+```{r}
+# load("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2_2.RData")
+
+
+matched_data <- c()
+
+for (sp_tf in Sp_tf_list) {
+  data <- get(sp_tf, matchit_otps)
+  tmp <- match.data(data) %>%
+    left_join(.,
+              table,
+              by = c("Species","TF","avgMethfilt","nCpGtot","foldE","DistanceTSS")
+              ) %>%
+    relocate("chr", "start", "end")
+  
+  write.table(
+    tmp,
+    file = paste0(
+      "/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/BimodalityTEs/",
+      sp_tf,
+      "_hypermeth_matchedData.tab"
+    ),
+    quote = F,
+    sep = "\t",
+    row.names = F,
+    col.names = T
+  )
+  
+  matched_data <- rbind(tmp, matched_data)
+  
+}
+
+###
+# remove TF-Sp combo with not enough instances
+matched_data <- matched_data %>%
+  filter(
+    !(Species == "Macaque" & TF == "CEBPA"),
+    !(Species == "Macaque" & TF == "HNF6"),
+    !(Species == "Macaque" & TF == "FoxA1"),
+    !(Species == "Dog" & TF == "HNF6"),
+    !(Species == "Dog" & TF == "FoxA1")
+  )
+
+
+
+```
+
+## import intersect with TE
+
+```{r fig.width=15, fig.height=20}
+
+new_colnames <- colnames(matched_data)
+new_colnames <- append(new_colnames, c("TEchr", "TEstart", "TEend", "TEstrand", "milliDiv", "repeatName", "repeatFamily"))
+
+matchedData_repeatsOverlap <- c()
+for(sp_tf in Sp_tf_list) {
+  matchedData_repeatsOverlap <- read.table(
+    file = paste0("/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/BimodalityTEs/",sp_tf,"_hypermeth_matchedData_nestedRep.tab")) %>% 
+    rbind(., matchedData_repeatsOverlap)
+}
+
+colnames(matchedData_repeatsOverlap) <- new_colnames
+
+###
+# remove TF-Sp combo with not enough instances
+matchedData_repeatsOverlap <- matchedData_repeatsOverlap %>% 
+  filter( !(Species=="Macaque" & TF=="CEBPA"),
+          !(Species=="Macaque" & TF=="HNF6"),
+          !(Species=="Macaque" & TF=="FoxA1"),
+          !(Species=="Dog" & TF=="HNF6"),
+          !(Species=="Dog" & TF=="FoxA1")
+          )
+  
+
+###
+
+# this table contains multiple line for the same TFBR
+# because it is the result of bedtools intersect, every match with a TE is reported
+matchedData_repeatsOverlap <- matchedData_repeatsOverlap %>% 
+  group_by(Species, TF, meth_cat, repeatFamily) %>% 
+  add_count(name="count_repeat") %>% 
+  filter(count_repeat>10,
+         repeatFamily!="Other") %>% 
+  mutate(subclass=as.factor(subclass)) %>% 
+  ungroup() %>% 
+  unite("id", c(Species, TF, chr:end), sep="-", remove=F )
+
+# this is the collapsed dataset
+# a TFBR is represented only once, the TEs that overalp with are collapsed.
+# However, this table is missing the TFBRs in matched_data that do not overlap with TEs
+collapsed_matchedData_repeatsOverlap <- matchedData_repeatsOverlap %>% 
+  select(Species, TF, id, meth_cat, repeatFamily, milliDiv) %>% 
+  group_by(Species, TF,id, meth_cat) %>%
+    summarise(repeatFamily = str_c(repeatFamily, collapse =","),
+              milliDiv=mean(milliDiv))
+
+## This is the final table with original matched_data entries
+## plus TE information
+all_matchedData_withRepeats <- matched_data %>% 
+  ungroup() %>% 
+  unite("id", c(Species, TF, chr:end), sep="-", remove=F ) %>% 
+  left_join(.,collapsed_matchedData_repeatsOverlap, by=c("Species", "TF", "id", "meth_cat") ) %>% 
+  mutate(TE=if_else(is.na(repeatFamily), "non-TE", "TE"),
+         meth_cat=as.factor(meth_cat),
+         Species=factor(Species, c("Human", "Macaque", "Mouse", "Rat", "Dog")))
+
+  
+    
+```
+
+
+## Supplementary figure: heatmap of TFBRsvsTE proportion in test vs control sets
+
+```{r}
+# PROPORTION TEs
+
+to_proptest <- all_matchedData_withRepeats %>% 
+    group_by(Species, TF, meth_cat) %>% 
+    add_count(name="tot") %>% 
+    group_by(Species, TF, meth_cat, tot, TE) %>% 
+    count() %>% 
+    filter(TE=="TE") %>% 
+    reshape2::dcast(Species + TF + tot~ meth_cat) %>% 
+  mutate(row=row_number())
+
+i=1
+prop_tes_pval=c()
+for (i in 1:nrow(to_proptest)) {
+  tmp_line <- to_proptest %>% filter(row==i)
+  res_greater <- prop.test(x=c(tmp_line$`1`, tmp_line$`0`), n=c(tmp_line$tot, tmp_line$tot), alternative = "greater")
+  tmp_line$stat_g <- res_greater$p.val
+  prop_tes_pval <- rbind(prop_tes_pval,tmp_line)
+}
+
+prop_tes_pval <- prop_tes_pval %>% 
+  mutate(sig_g=if_else(stat_g<0.005, "*", ""))
+
+
+pal <- brewer.pal(23, 'OrRd')
+prop_tes_pl <- prop_tes_pval %>% 
+  mutate(rel_prop=log2(`1`/`0`)) %>% 
+  ggplot( aes(x = Species, y = TF, fill = rel_prop)) +
+  geom_raster() +
+  geom_text(aes(label = sig_g), colour="white") +
+  ggtitle("TEs in hypermethylated regions vs controls")+
+  scale_fill_gradientn(colours = pal, limits=c(0.1, 0.6), oob=scales::squish) +
+  labs(fill="Relative Proportion")+
+  theme_minimal() +
+  theme(panel.grid = element_blank())
+prop_tes_pl
+
+
+
+#ggsave(plot=prop_tes_pl, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/hypermeth_TEs_testVsControl_hm.pdf")
+```
+
+
+# Fig2E
+
+```{r fig.width=10, fig.height=7}
+
+hypermeth_TEVsNonTE_allSps_allTFs <- all_matchedData_withRepeats %>%
+  filter(meth_cat == "1", ) %>%
+  ggplot(aes(x = TE, y = avgMethfilt, fill = TE)) +
+  geom_violin() +
+  geom_boxplot(
+    width = .1,
+    outlier.shape = NA,
+    notch = T ,
+    fill = "white"
+  ) +
+  coord_cartesian(ylim = c(50, 100)) +
+  #scale_y_continuous(trans="log1p")+
+  facet_wrap( ~ meth_cat) +
+  stat_compare_means(aes(label = ..p.signif..),
+                     label.x.npc = "center",
+                     label.y.npc = "top") +
+  facet_grid(TF ~ Species) +
+  theme_custom
+
+hypermeth_TEVsNonTE_allSps_allTFs
+
+#ggsave(plot=hypermeth_TEVsNonTE_allSps_allTFs, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/hypermeth_avgMeth_TEVsNonTE_allSps_allTFs.pdf")
+```
+
+
+```{r fig.width=10, fig.height=5}
+hypermeth_TEVsNonTE_allSps_CTCF <- all_matchedData_withRepeats %>%
+  filter(TF == "CTCF",
+         meth_cat == "1") %>%
+  ggplot(aes(x = TE, y = avgMethfilt, fill = TE)) +
+  geom_violin() +
+  geom_boxplot(
+    width = .1,
+    outlier.shape = NA,
+    position = position_dodge(width = 0.9),
+    notch = T
+  ) +
+  facet_wrap( ~ meth_cat) +
+  coord_cartesian(ylim = c(40, 100)) +
+  #scale_y_continuous(trans="log1p")+
+  stat_compare_means(aes(label = ..p.signif..),
+                     label.x.npc = "center",
+                     label.y.npc = "top") +
+  facet_grid(TF ~ Species) +
+  theme_custom
+
+hypermeth_TEVsNonTE_allSps_CTCF
+
+#ggsave(plot=hypermeth_TEVsNonTE_allSps_CTCF, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/hypermeth_avgMeth_TEVsNonTE_allSps_CTCF.pdf")
+
+```
+
+#Fig2F
+
+```{r fig.width=15, fig.height=10}
+
+
+div_pal=brewer.pal(name="PiYG",n=24)
+seq_pal=brewer.pal(name="Greens",n=24)
+
+
+to_hm_tmp <- matchedData_repeatsOverlap %>%
+  select(Species,
+         TF,
+         milliDiv,
+         repeatName,
+         repeatFamily,
+         count_repeat,
+         meth_cat) %>%
+  unite(id, c("TF", "Species"), sep = "_", remove = F) %>%
+  separate(repeatFamily, c("repFamily", "repClass"), sep = "/") %>%
+  mutate(
+    repClass = if_else(is.na(repClass), repFamily, repClass),
+    repFamily = if_else(repClass == "tRNA", "SINE", repFamily)
+  ) %>%
+  group_by(Species, TF, id, meth_cat, repFamily) %>%
+  add_count(name = "tot_family") %>%
+  group_by(Species, TF, id, meth_cat, repFamily, tot_family, repClass) %>%
+  summarise(n_rep = n()) %>%
+  mutate(freq = n_rep / tot_family) 
+  
+tmp <- to_hm_tmp %>% ungroup() %>%
+  group_by(id, Species, TF, repClass) %>%
+  summarise(tot_rep = sum(n_rep) , max_count = max(n_rep))
+
+to_hm <- left_join(to_hm_tmp, tmp, by = c("id", "Species", "TF", "repClass")) %>%
+  reshape2::dcast(Species + TF + id + repFamily + repClass + tot_rep + max_count ~ meth_cat,
+                  value.var = "freq") %>%
+  filter(tot_rep > 30 & max_count > 30)  %>%
+  mutate(rel_enrichment = log2(`1` / `0`)) %>%
+  filter(
+    repFamily != "Unknown",
+    repFamily != "Low_complexity",
+    repFamily != "Unknown",
+    repFamily != "rRNA",
+    repFamily != "scRNA",
+    repFamily != "snRNA",
+    repFamily != "Satellite",
+    repFamily != "Simple_repeat",
+    repClass != "DNA"
+  ) 
+
+### over representation
+tmp_tot <- to_hm_tmp %>% ungroup() %>% 
+  select(Species, TF, id, meth_cat, repClass, tot_family) %>% 
+  reshape2::dcast(Species+ TF+ repClass + id ~ meth_cat, fill = 0) %>% 
+  rename("tot_control"="0", "tot_test"="1")
+
+tmp_nrep <- to_hm_tmp %>% ungroup() %>% 
+  select(Species, TF, id, meth_cat, repClass, n_rep) %>% 
+  reshape2::dcast(Species+ TF+ repClass + id ~ meth_cat, fill = 0)%>% 
+  rename("nrep_control"="0", "nrep_test"="1")
+
+to_hm_pval <- full_join(tmp_tot, tmp_nrep) %>% 
+  mutate(nrep_control=nrep_control+1,
+         nrep_test=nrep_test+1,
+         tot_test=tot_test+1,
+         tot_control=tot_control+1) %>% 
+  filter(!(nrep_control<30 & nrep_test<30)) %>% 
+  mutate(row=row_number())
+
+i=1
+prop_tes_pval_relEnr=c()
+for (i in 1:nrow(to_hm_pval)) {
+  tmp_line <- to_hm_pval %>% filter(row==i)
+  #print(c(tmp_line$nrep_test, tmp_line$nrep_control))
+  #res_greater <- prop.test(x=c(tmp_line$nrep_test, tmp_line$nrep_control), n=c(tmp_line$tot_test, tmp_line$tot_control), alternative = "greater")
+  res_greater <- prop.test(x=c(tmp_line$nrep_test, tmp_line$nrep_control), n=c(tmp_line$tot_test, tmp_line$tot_control), alternative = "two.sided")
+  tmp_line$stat_g <- res_greater$p.val
+  prop_tes_pval_relEnr <- rbind(prop_tes_pval_relEnr,tmp_line)
+}
+
+prop_tes_pval_relEnr <- prop_tes_pval_relEnr %>% 
+  mutate(sig_g=if_else(stat_g<0.05, "*", ""))
+
+to_hm <- prop_tes_pval_relEnr %>% 
+  select(id, repClass, stat_g) %>% 
+  left_join(to_hm,. , by=c("id", "repClass")) %>%
+  mutate(TF = factor(TF, c("CTCF", "CEBPA", "HNF4a", "HNF6", "FoxA1")),
+         Species = factor(Species, c("Human", "Macaque", "Mouse", "Rat", "Dog")),
+         id = factor(id, c("CTCF_Human","CTCF_Macaque","CTCF_Mouse","CTCF_Rat","CTCF_Dog",
+                           "CEBPA_Human","CEBPA_Macaque","CEBPA_Mouse","CEBPA_Rat","CEBPA_Dog",
+                           "HNF4a_Human","HNF4a_Macaque","HNF4a_Mouse","HNF4a_Rat","HNF4a_Dog",
+                           "HNF6_Human","HNF6_Macaque","HNF6_Mouse","HNF6_Rat","HNF6_Dog",
+                           "FoxA1_Human","FoxA1_Macaque","FoxA1_Mouse","FoxA1_Rat","FoxA1_Dog")))%>% 
+  mutate(sig_g=if_else(stat_g<0.05, "*", ""))
+
+
+####
+
+# PLOT
+
+# only hypermeth regions
+hm_allTFs_hypermeth_relEnrichemt <- to_hm %>% 
+  filter(rel_enrichment>=0) %>% 
+ggplot( aes(x = id, y = repClass, fill = rel_enrichment)) +
+  geom_tile(color = "white",
+            lwd = 1.5,
+            linetype = 1) +
+  geom_text(aes(label = sig_g), colour="white") +
+  scale_fill_gradientn(
+    colours = seq_pal,
+    limits = c(0, .8),
+    oob = scales::squish
+  ) +
+  facet_grid(repFamily ~ TF, scales = "free", space = "free") +
+  theme_custom +
+  theme(
+    panel.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank(),
+    axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )
+  )
+
+hm_allTFs_hypermeth_relEnrichemt
+#ggsave(plot=hm_allTFs_hypermeth_relEnrichemt, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/hm_allTFs_hypermeth_relEnrichemt.pdf")
+
+
+## both control and test
+
+hm_allTFs_testvscontrol_relEnrichemt <- to_hm %>% 
+  #filter(rel_enrichment>=0) %>% 
+ggplot( aes(x = id, y = repClass, fill = rel_enrichment)) +
+  geom_tile(color = "white",
+            lwd = 1.5,
+            linetype = 1) +
+  geom_text(aes(label = sig_g), colour="white") +
+  scale_fill_gradientn(
+    colours = div_pal,
+    limits = c(-.8, .8),
+    oob = scales::squish
+  ) +
+  facet_grid(repFamily ~ TF, scales = "free", space = "free") +
+  theme_custom +
+  theme(
+    panel.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank(),
+    axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )
+  )
+
+hm_allTFs_testvscontrol_relEnrichemt
+#ggsave(plot=hm_allTFs_testvscontrol_relEnrichemt, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/hm_allTFs_testvscontrol_relEnrichemt.pdf")
+
+
+# to_hm %>%
+#   filter(rel_enrichment>=0) %>%
+#   mutate(rel_enrichment=abs(rel_enrichment)) %>% 
+#   ggplot(aes(rel_enrichment))+
+#   stat_ecdf(geom="point")+
+#   geom_hline(yintercept = .98)+
+#   geom_vline(xintercept = .8)+
+#   theme_custom
+# #levels(as.factor(tmp$repFamily))
+# to_hm %>%
+#   filter(rel_enrichment<0) %>%
+#   ggplot(aes(rel_enrichment))+
+#   stat_ecdf(geom="point")+
+#   geom_hline(yintercept = .95)+
+#   geom_vline(xintercept = .7)+
+#   theme_custom
+
+
+```
+
+
+
+# Revisions
+
+## 28b
+
+"Do direct binding sites (peaks that have the corresponding motif) have similar methylation patterns as indirect sites (peaks that to not have a motif)?"
+
+```{r fig.width=15, fig.height=10}
+
+motVsnonmot_meth <- table %>% 
+  mutate(Motifs=if_else(is.na(motCoord), "w/ motif", "w/o motif")) %>% 
+  ggplot( aes(x=Motifs,y=avgMethfilt, color=Species))+
+  geom_violin(fill="grey", alpha=0.3)+
+  facet_grid(TF~Species, scales="free")+
+  theme_custom+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        panel.grid.major = element_blank())+
+    scale_y_continuous(trans = "log1p", breaks = c(0, 25, 50, 75, 100))+
+    ylab("Avg Methylation %")+
+    colScale
+
+ggsave(plot=motVsnonmot_meth, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/motVsnonmot_meth.pdf")
+
+motVsnonmot_meth
+```
+
+## 12b
+
+
+```{r}
+tmp <- table %>% 
+  mutate(meth_cat=if_else(avgMethfilt>=65, "high", "low") ) %>%
+  filter(motCpG==1) %>% 
+  group_by(Species,TF, meth_cat) %>% 
+  summarise(tot=n()) %>% 
+  mutate(freq=tot*100/(sum(tot))) %>% 
+  mutate(region="TFBS")
+
+motifs_hyper_percent <- table %>% 
+  mutate(meth_cat=if_else(avgMethfilt>=65, "high", "low") ) %>%
+  group_by(Species,TF, meth_cat) %>% 
+  summarise(tot=n()) %>% 
+  mutate(freq=tot*100/(sum(tot))) %>% 
+  mutate(region="TFBR") %>% 
+  rbind(tmp,.) %>% 
+  unite(id, c("Species", "TF"), remove=F) %>% 
+  filter(meth_cat=="high") %>% 
+  ggplot( aes(x=id, y= freq, fill=region, colour=region))+
+   geom_bar(position="identity", stat="identity", alpha=0.3)+
+  scale_fill_manual(values = c("orange", "purple"))+
+  scale_colour_manual(values = c("orange", "purple"))+
+  facet_grid(~TF, scales="free") +
+  theme_custom +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title = element_blank())
+
+motifs_hyper_percent
+
+ggsave(pl=motifs_hyper_percent, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/motifs_hyper_percent.pdf")
+          
+```
+
+## 10b
+
+10-b
+
+Page 6 "considerable fraction": what is the fraction of CpGs (or regions?) that have intermediated levels?
+
+```{r}
+modes_exp_tmp <- modes_exp %>% 
+  mutate(low_boundary=mode2-15,
+          up_boundary=mode2+15)
+
+table %>% 
+  select(Species, TF, avgMethfilt) %>% 
+  left_join(., modes_exp_tmp, by=c("Species", "TF")) %>%
+  mutate( mode_cutoff=if_else(avgMethfilt>low_boundary & avgMethfilt<up_boundary, "IM", "else")) %>% 
+  ggplot(aes(x=TF, y=avgMethfilt)) +
+    geom_violin()+
+    geom_point(data=modes_exp_tmp, aes(y=low_boundary, x=TF))+
+    geom_point(data=modes_exp_tmp, aes(y=up_boundary, x=TF))+
+    scale_y_continuous(trans = "log1p")+
+    facet_grid(~Species, scales = "free")+
+    theme_custom
+  
+consid_fraction <- table %>% 
+  select(Species, TF, avgMethfilt) %>% 
+  left_join(., modes_exp_tmp, by=c("Species", "TF")) %>%
+  mutate( mode_cutoff=if_else(avgMethfilt>low_boundary & avgMethfilt<up_boundary, "IM", "else")) %>% 
+  group_by(Species, TF, mode_cutoff) %>% 
+  summarise(n=n()) %>% 
+  mutate(freq=n*100/sum(n)) %>% 
+  filter(mode_cutoff=="IM")
+
+write_csv(consid_fraction, file = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/considerable_fraction.txt", col_names = T )
+```
+
+
+# END
+
+```{r}
+save.image("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2_end.RData")
+# load("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Fig1-2_end.RData")
+```
+
+## 22b
+
+"What could explain the strong mirror effect of left/right clusters? There must be something that positions the regions. Could it be genes or other TF binding sites?"
+
+```{r}
+species_list <- c("Human", "Macaque", "Mouse", "Rat", "Dog")
+
+TSSsigned <- c()
+for(sp in species_list){
+  TSSsigned <- read.table(file=paste0("/nfs/research/flicek/user/rimoldi/Projects/EDM/Revisions/SpecularProf_direction/", sp, "_allTF_withTSSstrand.tab")) %>% 
+    rbind(., TSSsigned)
+}
+
+colnames_table <- colnames(table)
+colnames_table <- c(colnames_table, "TSSchr", "TSSst", "TSSend", "TSSsign", "TSSgene", "TSSdistance")
+colnames(TSSsigned) <- colnames_table
+
+# some TFBR overlap with multiple TSSs and 
+# the sign of these TSS can be both + and -
+# exclude them for now because ambiguos
+TSSsigned <- TSSsigned %>% 
+  group_by(Species, TF, chr, start, end, summit ) %>% 
+  add_count() %>% 
+  ungroup() %>% 
+  filter(n==1)
+
+# the directionality of the closest TSS doesn't explain mirrored left and right clusters
+TSSsigned %>% 
+  filter(TF!="CTCF", (Clusters=="left" | Clusters=="right")) %>% 
+  select(Species, TF, Clusters, TSSsign, TSSdistance)  %>% 
+  ggplot( aes(x=Clusters, fill=TSSsign)) +
+  geom_bar(position="fill")+
+  facet_grid(Species~TF) +
+  theme_custom
+
+# let's divide TFBRs based on their distance to the clostest TSS
+# TFBRs: close vs mid-distance vs far
+dist_quantiles <- TSSsigned %>% ungroup() %>% 
+  filter(TF!="CTCF", (Clusters=="left" | Clusters=="right")) %>%
+  pull(TSSdistance) %>% 
+  quantile(., c(0.33, 0.66))
+
+
+TSSsigned <- TSSsigned %>% ungroup() %>% 
+  filter(TF!="CTCF", (Clusters=="left" | Clusters=="right")) %>%
+  mutate(quant=case_when(TSSdistance<=dist_quantiles[1] ~ "close",
+                         TSSdistance>dist_quantiles[1] & TSSdistance<=dist_quantiles[2] ~ "mid",
+                         TSSdistance>dist_quantiles[2] ~ "far"))
+
+# even filtering for closest TFBRs doesn't help explain mirroring
+TSSsigned %>% ungroup() %>% 
+  filter(TF!="CTCF", (Clusters=="left" | Clusters=="right"),
+         quant=="close") %>% 
+  select(Species, TF, Clusters, TSSsign, TSSdistance)  %>% 
+  ggplot( aes(x=Clusters, fill=TSSsign)) +
+  geom_bar(position="fill")+
+  facet_grid(Species~TF) +
+  theme_custom
+  
+# !!! 
+# However, filtering for TFBRs that overlap with TSSs helps find an overabudnance of 
+# reverse TSS in left cluster, while forward TSS in right
+TSSsigned_plot <- TSSsigned %>% ungroup() %>% 
+  filter(TSSdistance==0) %>% 
+  filter(TF!="CTCF", (Clusters=="left" | Clusters=="right")) %>% 
+  ggplot( aes(x=Clusters, fill=TSSsign)) +
+  geom_bar(position="fill")+
+  facet_grid(Species~TF) +
+  theme_custom
+
+#ggsave(plot=TSSsigned_plot, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/TSSsigned_plot.pdf")
+```
+
+
+## 29b
+
+```{r fig.width=10, fig.height=6}
+table %>% 
+  filter(motCoord != "none") %>% 
+  group_by(Species, TF, motCpG, Clusters) %>% 
+  count() %>% 
+  mutate(Clusters=factor(Clusters, c("flat", "left", "right", "middle", "up", "NC")),
+         motCpG=if_else(motCpG==1, "CpG-motif", "non-CpG motif")) %>% 
+  ggplot( aes(x=TF, y=n, fill=Clusters))+
+  geom_col(position="fill")+
+  ylab("Fraction of TFBRs with motif")+
+  #geom_text(aes(label=as.character(n)), position = "fill", vjust=0.5)+
+  facet_grid(motCpG~Species, scales = "free")+
+  theme_custom+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        legend.position = "bottom")
+
+
+```
+
+

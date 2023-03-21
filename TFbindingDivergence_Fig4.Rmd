@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = FALSE,
 ```
 
 ```{r libraries, echo=FALSE,include=FALSE, message=FALSE}
+renv::load("/hps/software/users/flicek/rimoldi/Scripts/EDMscripts")
 
 
 library("ggplot2")
@@ -26,9 +27,9 @@ library("gridExtra")
 library("grid")
 library("reshape2")
 library("corrplot")
+library("clinfun")
 library("FactoMineR")
 library("factoextra")
-library("clinfun")
 
 grab_grob <- function(){
   grid.echo()
@@ -48,7 +49,9 @@ theme_custom <- theme_bw() + theme(
       panel.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      plot.margin=grid::unit(c(0,0,0,0), "mm"))
+      plot.margin=grid::unit(c(0,0,0,0), "mm"),strip.background =element_blank(),
+      strip.text.x = element_text(size = 15),
+      strip.text.y = element_text(size = 15))
 
 pal=c(brewer.pal(12, 'Set3')[5], brewer.pal(12, 'Set3')[4])
 names(pal) <- c("unbound", "bound")
@@ -228,7 +231,7 @@ BvsUnb<- ggplot(div_all_random, aes(x=TF,y=avgMethfilt, fill=binding))+
     #stat_compare_means(method="wilcox.test",
     #          label = "p.signif", hide.ns=F)
 BvsUnb
-ggsave(plot=BvsUnb, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution.pdf")
+##ggsave(plot=BvsUnb, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution.pdf")
 ```
 
 ## Orthologous peaks
@@ -263,7 +266,7 @@ BvsUnb_GainLoss_v1<- ggplot(GainsVsLosses, aes(x=TF,y=avgMethfilt, colour=bindin
     #stat_compare_means(method="wilcox.test",
     #          label = "p.signif", hide.ns=F)
 BvsUnb_GainLoss_v1
-ggsave(plot=BvsUnb_GainLoss_v1, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution_GainVsLosses_v1.pdf")
+##ggsave(plot=BvsUnb_GainLoss_v1, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution_GainVsLosses_v1.pdf")
 
 BvsUnb_GainLoss_v2 <- ggplot(GainsVsLosses, aes(x=TF,y=avgMethfilt, colour=binding, fill=isGain))+
   geom_boxplot(notch=TRUE, outlier.alpha=0.1)+
@@ -282,7 +285,7 @@ BvsUnb_GainLoss_v2 <- ggplot(GainsVsLosses, aes(x=TF,y=avgMethfilt, colour=bindi
               label = "p.signif", hide.ns=F)
 
 BvsUnb_GainLoss_v2
-ggsave(plot=BvsUnb_GainLoss_v2, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution_GainVsLosses_v2.pdf")
+##ggsave(plot=BvsUnb_GainLoss_v2, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_MethDistribution_GainVsLosses_v2.pdf")
 ```
 
 
@@ -361,14 +364,12 @@ avgMethevo <-  ggplot(tmp, aes(x=num_bindingCons, y=avgMethfilt, fill=binding))+
 #+
 #scale_fill_gradient2(low="white", mid=muted("red"), high="red", midpoint = mean(merge$avgMethfilt))+
 avgMethevo
-ggsave(plot=avgMethevo, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_evo_cat_MethDistribution.pdf")
+#ggsave(plot=avgMethevo, filename="/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Allsp_boundVSunbound_evo_cat_MethDistribution.pdf")
 ```
 
 
 
 # 4D: Association Test
-
-
 
 ```{r echo=FALSE, error=TRUE}
 
@@ -379,12 +380,15 @@ merge <- merge %>%
 merge$Clusters_short=as.factor(merge$Clusters)
 merge$Clusters_short=factor(merge$Clusters, levels=c("flat", "specular","middle","up","NC"))
 
-# I need contingency table of clusters and evo divergence
+```
+
+
+
+```{r fig.width=10, fig.height=10}
+pvals <-c()
+finaltab <- c()
 tf_vector<-c("CEBPA","CTCF","HNF6","HNF4a","FoxA1")
 sp_vector<-c("Human","Macaque","Mouse","Rat","Dog")
-
-pvals <-c()
-
 for (sp in sp_vector) {
   for ( tf in tf_vector) {
       #i=1+1
@@ -404,25 +408,40 @@ for (sp in sp_vector) {
       acast( num_bindingCons~Clusters, value.var="n") %>%
       as.table()
 
-    title<-paste0("Species cons vs Clusters - ",tf," - ",sp)
-    gplots::balloonplot(t(tab), main =title, xlab ="", ylab="",
-              label = FALSE, show.margins = FALSE)
-
     chisq <- chisq.test(tab)
     tmp=c(tf, sp,chisq$p.value )
     pvals<-rbind(pvals,tmp)
 
-    title<-paste0(tf," - ",sp)
-    p<- paste0("/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/CA/", title,".pdf")
-    association <- corrplot(chisq$residuals, is.cor = FALSE,title = title,  col = brewer.pal(10,'PRGn'))
-    pdf(p)
-    association
-    dev.off()
-    association
+    tab_tmp <- as.data.frame(t(chisq$stdres)) %>% 
+  rename("Clusters"=Var1, "SpCons"=Var2, "stdRes"=Freq) %>% 
+      mutate(Species=sp, TF=tf)
+
+  # Contibution in percentage (%)
+  contrib <- 100*chisq$residuals^2/chisq$statistic
+
+  finaltab <- as.data.frame(contrib) %>% 
+    rename("Clusters"=Var2, "SpCons"=Var1, "Contribution"=Freq) %>% 
+    full_join(tab_tmp,., by=c("Clusters", "SpCons")) %>% 
+    rbind(., finaltab)
+
 
     }
   }
 }
+
+
+finaltab <- finaltab %>% 
+  mutate(Species=factor(Species, sp_vector),
+         TF=factor(TF, tf_vector),
+         SpCons=factor(SpCons, c("1", "2", "3", "4", "5")),
+         Clusters=factor(Clusters, c("flat", "specular","middle", "up", "NC")))
+
+
+Association_plot <- ggpubr::ggballoonplot(finaltab, y="SpCons", x="Clusters", fill="stdRes", size="Contribution",
+                      ggtheme = theme_custom)  +
+     scale_fill_gradientn(colors = my_cols, limits=c(-25, 25), oob=scales::squish ) 
+Association_plot <- Association_plot %>%   facet(facet.by =  c("Species", "TF"), scales="free") 
+Association_plot
+
+ggsave(Association_plot, filename = "/nfs/research/flicek/user/rimoldi/Projects/EDM/Figures/Association_plot_all.pdf")
 ```
-
-
